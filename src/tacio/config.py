@@ -5,6 +5,24 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
+def ler_variavel(nome: str) -> str:
+    """Variável de ambiente; no Windows, cai para a variável do usuário gravada no registro.
+
+    Clientes como o Claude Desktop (Store) herdam o ambiente de quando o Windows iniciou e
+    não enxergam uma variável criada depois, mesmo reiniciando o app.
+    """
+    valor = os.environ.get(nome, "")
+    if valor or os.name != "nt":
+        return valor
+    try:
+        import winreg
+
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as chave:
+            return str(winreg.QueryValueEx(chave, nome)[0])
+    except OSError:
+        return ""
+
+
 @dataclass
 class SqlConfig:
     dsn: str
@@ -13,7 +31,7 @@ class SqlConfig:
     leitura_suja: bool = True
 
     def connection_string(self) -> str:
-        pwd = os.environ.get(self.senha_env, "")
+        pwd = ler_variavel(self.senha_env)
         return f"{self.dsn};PWD={pwd}" if pwd else self.dsn
 
 

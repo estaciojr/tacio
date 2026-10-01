@@ -4,7 +4,7 @@ from typing import Any, Protocol, Sequence
 import sqlglot
 from sqlglot import exp
 
-from ..config import SqlConfig
+from ..config import SqlConfig, ler_variavel
 from ..policy import PoliticaViolada
 
 _PROIBIDOS = (
@@ -50,11 +50,9 @@ class SqlServerLeitor:
         self.cfg = cfg
 
     def _conectar(self):
-        import os
-
         import pyodbc  # import tardio: testes rodam sem driver ODBC
 
-        if self.cfg.senha_env and not os.environ.get(self.cfg.senha_env):
+        if self.cfg.senha_env and not ler_variavel(self.cfg.senha_env):
             raise PoliticaViolada(f"Senha do banco não configurada: defina a variável de ambiente "
                                   f"{self.cfg.senha_env} e reinicie o cliente.")
 
