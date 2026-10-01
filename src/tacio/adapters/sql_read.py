@@ -50,7 +50,13 @@ class SqlServerLeitor:
         self.cfg = cfg
 
     def _conectar(self):
+        import os
+
         import pyodbc  # import tardio: testes rodam sem driver ODBC
+
+        if self.cfg.senha_env and not os.environ.get(self.cfg.senha_env):
+            raise PoliticaViolada(f"Senha do banco não configurada: defina a variável de ambiente "
+                                  f"{self.cfg.senha_env} e reinicie o cliente.")
 
         conn = pyodbc.connect(self.cfg.connection_string(), autocommit=True, readonly=True)
         conn.timeout = self.cfg.timeout_s
