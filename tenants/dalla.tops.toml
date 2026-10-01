@@ -1,0 +1,195 @@
+# Classificação das TOPs de entrada/compra por natureza — tenant Dalla.
+#
+# Fonte da verdade do Tacio para "o que é compra". Nada disso fica no código: outro cliente
+# tem o próprio arquivo, e a futura tela de configuração edita este mesmo formato.
+#
+# Montado em 01/10/2026 a partir de:
+#   - uso real das TOPs TIPMOV 'C' nos últimos 12 meses (notas, valor, parceiro, ATUALFIN);
+#   - curadoria dos dashboards entradas_compras (grupos), rentabilidade_compras e DS 408.
+# Os itens marcados  # REVISAR  dependem de confirmação de compras/fiscal (ver [pendencias]).
+#
+# Valores entre parênteses: notas / R$ em 12 meses (até 30/09/2026). "inativa" = sem movimento.
+
+# --- naturezas ---------------------------------------------------------------------
+# sinal: 1 soma, -1 subtrai (devolução).  compra: entra no padrão das tools de compra?
+[naturezas.revenda]
+nome = "Compra de revenda"
+sinal = 1
+compra = true
+
+[naturezas.transferencia]
+nome = "Transferência entre empresas Dalla"
+sinal = 1
+compra = false
+
+[naturezas.bonificacao]
+nome = "Bonificação / verba / amostra"
+sinal = 1
+compra = false
+
+[naturezas.servico]
+nome = "Serviço tomado"
+sinal = 1
+compra = false
+
+[naturezas.consumo]
+nome = "Uso e consumo"
+sinal = 1
+compra = false
+
+[naturezas.utilidades]
+nome = "Utilidades (energia, telefone, faturas)"
+sinal = 1
+compra = false
+
+[naturezas.imobilizado]
+nome = "Imobilizado / peças / obra"
+sinal = 1
+compra = false
+
+[naturezas.complementar]
+nome = "Nota complementar"
+sinal = 1
+compra = false
+
+[naturezas.devolucao_compra]
+nome = "Devolução de compra"
+sinal = -1
+compra = false
+
+[naturezas.ajuste]
+nome = "Ajuste de inventário / kit / implantação"
+sinal = 1
+compra = false
+
+[naturezas.outras]
+nome = "Outras entradas (remessa, consignado, conserto...)"
+sinal = 1
+compra = false
+
+# --- TOP -> natureza ---------------------------------------------------------------
+[tops]
+# Revenda
+1430 = "revenda"        # COMPRA - REV. CD (2.531 / 47,3 mi)
+1410 = "revenda"        # COMPRA - REVENDA (2.126 / 31,7 mi)
+1431 = "revenda"        # COMPRA - REVENDA VLR. BONF. (BIANCO) CD (429 / 8,4 mi)  REVISAR
+1479 = "revenda"        # COMPRA - REVENDA - SELLERS (41 / 253 mil)
+1497 = "revenda"        # NOTA DE COMPRA (IMPORTAÇÃO - DI) (1 / 71 mil)
+1487 = "revenda"        # COMPRA - REVENDA (GENERICO) — inativa
+1443 = "revenda"        # ENTRADA MERC. REV. ACOBERTAMENTO CD — inativa
+1444 = "revenda"        # ENTRADA MERC. REV. ACOBERTAMENTO LOJA — inativa
+1472 = "revenda"        # NF COMPRA CONSIGNADO PARA REVENDA — inativa
+1404 = "revenda"        # ENTRADA FUTURA (COMPRAS REV) — inativa, sem financeiro  REVISAR
+1408 = "revenda"        # ENTRADA FUTURA (COMPRAS REC-CD) — inativa, sem financeiro  REVISAR
+1485 = "revenda"        # COMPRA - ENT. MERC ENT FUTURA — inativa, sem financeiro  REVISAR
+1447 = "revenda"        # ENTRADA INDUSTRIALIZACAO EFETUADA — inativa (DS 408 conta; rentabilidade não)  REVISAR
+
+# Transferência (100% com parceiro empresa Dalla, sem financeiro)
+1456 = "transferencia"  # TRANSFERÊNCIA SIMB. CD-LOJA - ENTRADA (39.727 / 45,1 mi)
+1457 = "transferencia"  # TRANS CD - LOJA - ENTRADA C/ CONFERÊNCIA (12.367 / 14,5 mi)
+1453 = "transferencia"  # TRANSFERÊNCIA LOJA-CD WMS (ENTRADA) (1.429 / 2,1 mi)
+1454 = "transferencia"  # TRANSFERÊNCIA AUTOMÁT. LOJA-CD - ENTRADA (1.794 / 866 mil)
+1468 = "transferencia"  # TRANSF. DIRETA ENTRE LOJAS(ENTRADA) (754 / 1,1 mi)
+1493 = "transferencia"  # TRANSFERENCIA CD/CD (ENTRADA) (13 / 353 mil)
+
+# Bonificação
+1413 = "bonificacao"    # COMPRA - BONIF. RECOMPOSICAO DE MARGEM (37 / 1,7 mi)  REVISAR
+1412 = "bonificacao"    # COMPRA - BONIFICACAO VPC (51 / 100 mil)  REVISAR (DS 408 conta como compra)
+1432 = "bonificacao"    # COMPRA - BONIFICACAO VPC CD (41 / 485 mil)
+1433 = "bonificacao"    # COMPRA - BONIF. RECOMP DE MARGEM CD (7 / 46 mil)
+1434 = "bonificacao"    # COMPRA - BONIFICACAO ENXOVAL CD
+1435 = "bonificacao"    # COMPRA - BONIFICACAO ATEC CD
+1436 = "bonificacao"    # COMPRA - BONIFICACAO PDV PROMOCIONAL CD
+1437 = "bonificacao"    # COMPRA - BONIFICACAO SHOWROOM CD
+1438 = "bonificacao"    # COMPRA - BONIFICACAO ENXOVAL
+1439 = "bonificacao"    # COMPRA - BONIFICACAO ATEC
+1440 = "bonificacao"    # COMPRA - BONIFICACAO PDV PROMOCIONAL
+1441 = "bonificacao"    # COMPRA - BONIFICACAO SHOWROOM
+1442 = "bonificacao"    # COMPRA - BONIFICACAO USO CONSUMO
+1461 = "bonificacao"    # COMPRA - BONIFICACAO VERBA
+1462 = "bonificacao"    # COMPRA - BONIFICACAO VERBA CD
+1409 = "bonificacao"    # COMPRA - BONIFICACAO GENERICA
+1420 = "bonificacao"    # COMPRA - BONIFICAÇÃO MOSTRUARIO
+1421 = "bonificacao"    # ENTRADA AMOSTRA GRATIS
+
+# Serviço tomado
+1416 = "servico"        # COMPRA - SERVICO TOMADO (3.704 / 14,2 mi)
+1486 = "servico"        # COMPRA - SERVICO TOMADO NFSE (12.758 / 1,4 mi) — integração ADN; ex.: frete Dalla Transportadora
+
+# Uso e consumo
+1414 = "consumo"        # COMPRA - MATERIAL DE CONSUMO (1.148 / 1,1 mi)
+1417 = "consumo"        # COMPRA - COMBUSTIVEL CONSUMO (534 / 1,2 mi)
+1426 = "consumo"        # COMPRA PARA USO/CONSUMO INTERNO (138 / 57 mil)
+1406 = "consumo"        # SIMPLES FATURAMENTO (USO CONSUMO) (18 / 201 mil)
+
+# Utilidades
+1418 = "utilidades"     # COMPRA - ENERGIA ELETRICA (183 / 561 mil)
+1452 = "utilidades"     # COMPRA-PRESTACAO DE SERVIÇO DE COMUNICAO (188 / 1,1 mi)
+1419 = "utilidades"     # COMPRA - TELEFONE/INTERNET (17 / 23 mil)
+1460 = "utilidades"     # COMPRA - FATURAS (247 / 346 mil) — DS 408 conta como compra  REVISAR
+
+# Imobilizado / peças / obra
+1415 = "imobilizado"    # COMPRA - IMOBILIZADO (24 / 540 mil)
+1425 = "imobilizado"    # COMPRA - PEÇAS VEICULARES (635 / 716 mil)
+1445 = "imobilizado"    # COMPRA - MATERIAL PARA OBRA (346 / 669 mil)
+1455 = "imobilizado"    # COMPRA - IMOBILIZADO (OBRA) — inativa
+1489 = "imobilizado"    # ENTRADA IMOBILIZADO TERCEIROS (LOCACAO) — inativa
+
+# Nota complementar
+1466 = "complementar"   # NOTA COMPLEMENTAR DE IMPOSTO (ENTRADA) (2 / 43 mil)
+1231 = "complementar"   # NOTA COMPLEMENTAR DE VALOR ENTRADA — inativa
+1470 = "complementar"   # NOTA COMPLENTAR DE VALOR E ICMS — inativa
+1513 = "complementar"   # NOTA COMPELMENTAR IMPOSTO (DEV COM) — TIPMOV E
+
+# Devolução de compra (TIPMOV E — abate a compra)
+1500 = "devolucao_compra"  # DEV COMP P/REVENDA
+1502 = "devolucao_compra"  # DEV COMP MAT CONSUMO
+1519 = "devolucao_compra"  # DEV COMP P/REVENDA - SELLERS (1 nota em 12 meses, VERO DECOR)
+1520 = "devolucao_compra"  # EST. DEV. COMPRA REVENDA (1500) — estorno da devolução  REVISAR sinal
+1178 = "devolucao_compra"  # DEVOLUCAO DE ATEC  REVISAR
+
+# Ajuste de inventário / kit / implantação
+1490 = "ajuste"         # AJUSTE DE INVENTARIO LOJA(ENTRADA) (392 / 1,3 mi)
+1491 = "ajuste"         # AJUSTE DE INV TROCA DE LOTE(ENTRADA)
+1495 = "ajuste"         # RECLAS. MERC. FORMACAO DE KIT (ENTRADA) (3 / 226 mil)
+1498 = "ajuste"         # EXPLOSÃO DE LOTE NA CONFERENCIA WMS
+1499 = "ajuste"         # IMPLANTACAO DE ESTOQ — inativa
+1459 = "ajuste"         # OUTRAS ENTRADAS (ESTOQUE)
+
+# Outras
+1423 = "outras"         # OUTRAS ENTRADAS (62 / 89 mil) — DS 408 conta como compra  REVISAR
+1428 = "outras"         # ENTRADA DE ACOBERTAMENTO (1 / 13 mil) — DS 408 conta como compra  REVISAR
+1422 = "outras"         # NF RECEB. CONSIGNADO
+1471 = "outras"         # NF RECEB. COMODATO
+1482 = "outras"         # REMESSA DE MERCADORIA POR CONTA E ORDEM
+1496 = "outras"         # REMESSA DE MERCADORIA OU BEM PARA DEMONS
+1429 = "outras"         # REMESSA DE VASILHAME E SACARIA
+1427 = "outras"         # RETORNO DE CONSERTO CD
+1451 = "outras"         # RETORNO DE CONSERTO LOJA
+1488 = "outras"         # OUTRAS ENTRADAS ESTORNO DEV USO CONSUMO
+1483 = "outras"         # ENTRADA NF EMISSAO PROPRIA - COMPRA (5 / 165 mil, parceiro Dalla Serra) — NÃO é compra (confirmado 01/10/2026)
+
+# --- checagens automáticas (o Tacio avisa em vez de contar errado) ----------------
+[checagens]
+# TOP com movimento que não está em [tops] -> aviso "TOP não classificada".
+avisar_top_nao_classificada = true
+# Natureza 'revenda' com parceiro que é empresa do grupo (TSIEMP.CODPARC) -> aviso.
+revenda_sem_parceiro_do_grupo = true
+# Natureza 'transferencia' com parceiro de fora do grupo -> aviso.
+transferencia_so_entre_empresas = true
+# Empresas cadastradas na TSIEMP que vendem de verdade para a Dalla (revenda sem aviso).
+parceiros_grupo_fornecedores = [
+  575577,  # VERO DECOR (emp 13/25) — recebe importações e revende para a Dalla (confirmado 01/10/2026)
+  215094,  # MEGA DESIGN (emp 18) — importadora (confirmado 01/10/2026)
+  404171,  # VENETO (emp 17) — não é importadora; vende alguns itens específicos (confirmado 01/10/2026)
+]
+
+# --- pendências de confirmação (compras/fiscal) -----------------------------------
+[pendencias]
+itens = [
+  "1431 Revenda valor bonificado Bianco (8,4 mi): é compra de revenda?",
+  "1412/1413 VPC e recomposição de margem: bonificação ou compra? (DS 408 conta a 1412)",
+  "1447, 1423, 1428, 1460: DS 408 conta como compra; aqui ficaram fora",
+  "1404/1408/1485 entrada futura (inativas): onde fica o faturamento, para não contar duas vezes?",
+  "1520 estorno de devolução e 1178 devolução ATEC: sinal e natureza",
+]

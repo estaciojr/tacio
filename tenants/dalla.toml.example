@@ -1,0 +1,67 @@
+# Um processo = um tenant. Vários clientes = um container por cliente.
+[tenant]
+id = "dalla"
+nome = "Dalla Home Center"
+packs = ["meta", "compras", "estoque"]
+# Empresas (CODEMP) que este servidor pode consultar. Vazio = todas.
+codemp_permitidas = []
+
+[sql]
+# A senha vem de variável de ambiente, nunca do arquivo.
+dsn = "DRIVER={ODBC Driver 18 for SQL Server};SERVER=sqlreplica.dalla.local;DATABASE=SANKHYA;UID=tacio_leitura;TrustServerCertificate=yes"
+senha_env = "TACIO_SQL_PWD"
+timeout_s = 20
+# true = SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED (não trava a operação)
+leitura_suja = true
+
+[politica]
+max_linhas = 200
+# Colunas sempre mascaradas no retorno
+colunas_mascaradas = ["CGC_CPF", "CPF"]
+# Mascara CPF encontrado em texto livre (observações etc.)
+mascarar_cpf_em_texto = true
+# Escape de SQL livre (tool sql_consulta). Desligue em clientes.
+sql_livre = true
+tabelas_sql_livre = ["TGFCAB", "TGFITE", "TGFPRO", "TGFPAR", "TGFEST", "TGFGRU", "TSIEMP", "TGFTOP", "TGFVAR"]
+
+[auditoria]
+arquivo = "logs/auditoria.jsonl"
+
+[http]
+host = "0.0.0.0"
+porta = 8765
+token_env = "TACIO_TOKEN"
+
+# --- Operators ---------------------------------------------------------------
+[operators]
+diretorio = "operators"            # um TOML por operator
+estado = "dados/operators.db"      # SQLite: o que já foi alertado
+# Só usado por operators com analisar_com_llm = true (envia dados agregados à API).
+llm_modelo = "claude-haiku-4-5-20251001"
+llm_api_key_env = "ANTHROPIC_API_KEY"
+
+# Canais: nome livre -> referenciado no campo `canais` do operator.
+[canais.console]
+tipo = "console"
+
+[canais.compras_telegram]
+tipo = "telegram"
+token_env = "TACIO_TELEGRAM_TOKEN"
+chat_id = "-1001234567890"
+
+[canais.compras_teams]
+tipo = "teams"                     # webhook de Workflow do Teams (Adaptive Card)
+url_env = "TACIO_TEAMS_COMPRAS_URL"
+
+[canais.gerencia_email]
+tipo = "email"
+smtp_host = "smtp.dalla.local"
+smtp_porta = 587
+usuario = "tacio@dalla.com.br"
+senha_env = "TACIO_SMTP_PWD"
+remetente = "tacio@dalla.com.br"
+para = ["compras@dalla.com.br"]
+
+# Classificação das TOPs por natureza: um TOML por cliente (modelo em dalla.tops.toml).
+[classificacao]
+tops = "dalla.tops.toml"

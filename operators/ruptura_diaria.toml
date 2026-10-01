@@ -1,0 +1,17 @@
+# Ruptura confirmada: produto que vendeu nos últimos 30 dias e está zerado na loja.
+# Avisa só o que é novo desde ontem e o que foi resolvido.
+[operator]
+id = "ruptura_diaria"
+nome = "Ruptura nas lojas"
+agenda = "0 7 * * 1-6"            # 7h, segunda a sábado
+tool = "ruptura_por_loja"
+params = { dias = 30, incluir_risco = false, top = 200 }
+canais = ["console"]              # troque por ["compras_telegram"] ou ["compras_teams"]
+chave = ["CODEMP", "CODPROD"]
+campos_msg = ["CODEMP", "CODPROD", "DESCRPROD", "VENDA_MEDIA_DIA", "VLR_VENDIDO_PERIODO"]
+max_itens_msg = 20
+analisar_com_llm = false
+instrucao_llm = "Priorize por valor vendido no período e aponte lojas com muitas rupturas."
+
+[operator.minimo]
+VLR_VENDIDO_PERIODO = 300         # ignora itens de giro irrelevante

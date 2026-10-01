@@ -1,0 +1,20 @@
+# Ambiente e cache
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+
+# Dados de execução
+logs/
+dados/
+
+# Configuração local do tenant (DSN/usuário). O modelo versionado é dalla.toml.example;
+# a classificação de TOPs (*.tops.toml) é versionada.
+tenants/*.toml
+!tenants/*.toml.example
+!tenants/*.tops.toml
+
+.env
