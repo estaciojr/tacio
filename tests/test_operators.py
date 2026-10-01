@@ -71,6 +71,10 @@ iminente_dias = 15
 alerta_dias = 30
 lojas = [1, 2, 3]
 empresa_cd = 4
+locais_estoque = [101, 102]
+[ruptura.encomenda]
+campo_item = "AD_ENCOMENDA"
+valor = "S"
 [ruptura.produto_ativo]
 campo = "AD_CODIGO"
 valores = [1]
@@ -121,7 +125,9 @@ def test_ruptura_sql_segue_a_regra_do_tenant(tmp_path):
     assert "TPO.DHALTER = CAB.DHTIPOPER" in sql            # TGFTOP versionada
     assert "CAB.CODEMP IN (1,2,3)" in sql and "EST.CODEMP IN (1,2,3,4)" in sql
     assert "PRO.CODGRUPOPROD IN (101001001)" in sql and "PRO.AD_CODIGO IN (?)" in sql
-    assert params[1:] == [3, 1]  # CODEMP pedido + valor de "de linha"
+    assert "EST.CODLOCAL IN (101,102)" in sql                # só locais de venda
+    assert "ISNULL(ITE.AD_ENCOMENDA, '') <> ?" in sql         # encomenda fora do giro
+    assert params[1:] == [3, "S", 1]  # CODEMP, valor de encomenda, valor de "de linha"
     assert res["rupturas"] == 1 and res["periodo_dias"] == 90
 
 

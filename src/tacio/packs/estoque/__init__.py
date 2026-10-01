@@ -5,7 +5,9 @@ A regra de ruptura não está no código: os parâmetros vêm de ctx.regra("rupt
 - Universo: produto ativo "de linha" que vendeu na loja nos últimos `dias_giro` dias.
 - Venda: TOPs com GOLSINAL = -1 (vendas e devoluções de venda), TGFTOP casada por
   DHTIPOPER; quantidade líquida = QTDNEG * GOLSINAL * GOLDEV * -1.
-- Estoque disponível: SUM(ESTOQUE - RESERVADO) da TGFEST, estoque próprio (TIPO 'P').
+- Estoque disponível: SUM(ESTOQUE - RESERVADO) da TGFEST, estoque próprio (TIPO 'P'),
+  só nos locais de venda configurados (fora: reserva de encomenda, almoxarifado, ATEC...).
+- Venda sob encomenda (campo do item configurado) fica fora do giro e da venda média.
 - Ruptura: disponível <= 0. Iminente/alerta: cobertura em dias até os limites configurados.
 - Volumoso: com estoque no CD não é ruptura nem risco da loja (status CD_ATENDE).
 """
@@ -34,11 +36,15 @@ class RegraRuptura:
     campo_ativo: str
     valores_ativo: list[Any]
     grupos_volumoso: list[int]
+    locais_estoque: list[int]
+    campo_encomenda: str
+    valor_encomenda: Any
 
     @classmethod
     def de(cls, raw: dict) -> "RegraRuptura":
         r = raw.get("ruptura") or {}
         ativo = r.get("produto_ativo") or {}
+        encomenda = r.get("encomenda") or {}
         regra = cls(
             dias_giro=int(r.get("dias_giro", 90)),
             iminente_dias=int(r.get("iminente_dias", 15)),
@@ -49,6 +55,9 @@ class RegraRuptura:
             campo_ativo=str(ativo.get("campo", "")).upper(),
             valores_ativo=list(ativo.get("valores", [])),
             grupos_volumoso=[int(x) for x in (r.get("volumoso") or {}).get("grupos", [])],
+            locais_estoque=[int(x) for x in r.get("locais_estoque", [])],
+            campo_encomenda=str(encomenda.get("campo_item", "")).upper(),
+            valor_encomenda=encomenda.get("valor", "S"),
         )
         if not regra.lojas:
             raise PoliticaViolada("Regra de ruptura sem lojas configuradas.")
@@ -56,6 +65,8 @@ class RegraRuptura:
             raise PoliticaViolada("Regra de ruptura: iminente_dias deve ser >= 1 e <= alerta_dias.")
         if regra.campo_ativo and not _IDENTIFICADOR.match(regra.campo_ativo):
             raise PoliticaViolada(f"Regra de ruptura: campo '{regra.campo_ativo}' inválido.")
+        if regra.campo_encomenda and not _IDENTIFICADOR.match(regra.campo_encomenda):
+            raise PoliticaViolada(f"Regra de ruptura: campo '{regra.campo_encomenda}' inválido.")
         if regra.campo_ativo and not regra.valores_ativo:
             raise PoliticaViolada("Regra de ruptura: produto_ativo.valores vazio.")
         return regra
@@ -108,6 +119,12 @@ def ruptura_por_loja(ctx: Contexto, codemp: int | None = None, incluir_risco: bo
     volumoso = (f"CASE WHEN PRO.CODGRUPOPROD IN ({_ints(regra.grupos_volumoso)}) THEN 1 ELSE 0 END"
                 if regra.grupos_volumoso else "0")
     lojas, cd = _ints(regra.lojas), int(regra.empresa_cd)
+    filtro_local = (f" AND EST.CODLOCAL IN ({_ints(regra.locais_estoque)})"
+                    if regra.locais_estoque else "")
+    filtro_encomenda, p_encomenda = "", []
+    if regra.campo_encomenda:
+        filtro_encomenda = f" AND ISNULL(ITE.{regra.campo_encomenda}, '') <> ?"
+        p_encomenda = [regra.valor_encomenda]
     qtd_liquida = "ITE.QTDNEG * TPO.GOLSINAL * TPO.GOLDEV * -1"
     sql = f"""
         WITH VENDAS AS (
@@ -119,14 +136,14 @@ def ruptura_por_loja(ctx: Contexto, codemp: int | None = None, incluir_risco: bo
                                    AND TPO.DHALTER = CAB.DHTIPOPER
             JOIN sankhya.TGFITE ITE ON ITE.NUNOTA = CAB.NUNOTA
             WHERE TPO.GOLSINAL = -1 AND CAB.STATUSNOTA = 'L'
-              AND CAB.DTNEG >= ? AND CAB.CODEMP IN ({lojas}){f_cab}
+              AND CAB.DTNEG >= ? AND CAB.CODEMP IN ({lojas}){f_cab}{filtro_encomenda}
             GROUP BY CAB.CODEMP, ITE.CODPROD
             HAVING SUM({qtd_liquida}) > 0
         ),
         ESTQ AS (
             SELECT EST.CODEMP, EST.CODPROD, SUM(EST.ESTOQUE - EST.RESERVADO) AS DISPONIVEL
             FROM sankhya.TGFEST EST
-            WHERE {_ESTOQUE_PROPRIO} AND EST.CODEMP IN ({lojas},{cd})
+            WHERE {_ESTOQUE_PROPRIO} AND EST.CODEMP IN ({lojas},{cd}){filtro_local}
             GROUP BY EST.CODEMP, EST.CODPROD
         )
         SELECT V.CODEMP, V.CODPROD, PRO.DESCRPROD, PRO.CODGRUPOPROD,
@@ -142,7 +159,8 @@ def ruptura_por_loja(ctx: Contexto, codemp: int | None = None, incluir_risco: bo
         WHERE PRO.ATIVO = 'S'{filtro_ativo}
     """
     # Busca o universo inteiro (posições ativas) para calcular o índice; devolve só o top.
-    universo, _ = ctx.sql.consultar(sql, [desde, *p_cab, *p_ativo], max_linhas=200_000)
+    universo, _ = ctx.sql.consultar(sql, [desde, *p_cab, *p_encomenda, *p_ativo],
+                                    max_linhas=200_000)
 
     contagem = dict.fromkeys(_ORDEM_STATUS, 0)
     vlr_total = vlr_ruptura = 0.0
