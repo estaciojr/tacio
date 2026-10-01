@@ -55,6 +55,8 @@ class TenantConfig:
     canais: dict[str, dict] = field(default_factory=dict)
     # TOML com a classificação das TOPs por natureza (relativo ao TOML do tenant).
     classificacao_tops: str | None = None
+    # Parâmetros de regra por domínio: nome -> TOML (ex.: {"ruptura": ".../dalla.ruptura.toml"}).
+    regras: dict[str, str] = field(default_factory=dict)
 
 
 def carregar(caminho: str | Path) -> TenantConfig:
@@ -64,6 +66,8 @@ def carregar(caminho: str | Path) -> TenantConfig:
     tops = raw.get("classificacao", {}).get("tops")
     if tops:
         tops = str((Path(caminho).parent / tops).resolve())
+    regras = {nome: str((Path(caminho).parent / arq).resolve())
+              for nome, arq in raw.get("regras", {}).items()}
     return TenantConfig(
         id=t["id"],
         nome=t.get("nome", t["id"]),
@@ -76,4 +80,5 @@ def carregar(caminho: str | Path) -> TenantConfig:
         operators=OperatorsConfig(**raw.get("operators", {})),
         canais=raw.get("canais", {}),
         classificacao_tops=tops,
+        regras=regras,
     )

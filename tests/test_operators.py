@@ -57,20 +57,37 @@ class CanalMemoria:
         self.msgs.append((titulo, texto))
 
 
-def _item(emp, prod, status="RUPTURA", vlr="1000.00", disp=0):
-    return {"CODEMP": emp, "CODPROD": prod, "DESCRPROD": f"PRODUTO {prod}",
-            "DISPONIVEL": Decimal(disp), "VENDA_MEDIA_DIA": Decimal("2.50"),
-            "COBERTURA_DIAS": Decimal("0"), "STATUS": status,
-            "VLR_VENDIDO_PERIODO": Decimal(vlr)}
+def _item(emp, prod, vlr="1000.00", disp=0, qtd="90", disp_cd=0, volumoso=0):
+    """Linha do universo de ruptura como o SQL devolve (90 dias: qtd 90 = 1 por dia)."""
+    return {"CODEMP": emp, "CODPROD": prod, "DESCRPROD": f"PRODUTO {prod}", "CODGRUPOPROD": 1,
+            "VOLUMOSO": volumoso, "DISPONIVEL": Decimal(disp), "DISPONIVEL_CD": Decimal(disp_cd),
+            "QTD_VENDIDA_PERIODO": Decimal(qtd), "VLR_VENDIDO_PERIODO": Decimal(vlr)}
+
+
+REGRA_RUPTURA = """
+[ruptura]
+dias_giro = 90
+iminente_dias = 15
+alerta_dias = 30
+lojas = [1, 2, 3]
+empresa_cd = 4
+[ruptura.produto_ativo]
+campo = "AD_CODIGO"
+valores = [1]
+[ruptura.volumoso]
+grupos = [101001001]
+"""
 
 
 def _tenant(tmp_path, dir_ops):
+    (tmp_path / "ruptura.toml").write_text(REGRA_RUPTURA, encoding="utf-8")
     return TenantConfig(
         id="teste", nome="Teste", packs=["meta", "compras", "estoque"], codemp_permitidas=[],
         sql=SqlConfig(dsn="x"), politica=PoliticaConfig(),
         auditoria_arquivo=str(tmp_path / "audit.jsonl"), http=HttpConfig(),
         operators=OperatorsConfig(diretorio=str(dir_ops), estado=str(tmp_path / "ops.db")),
         canais={"console": {"tipo": "console"}},
+        regras={"ruptura": str(tmp_path / "ruptura.toml")},
     )
 
 
@@ -78,7 +95,7 @@ def _operator(dir_ops, **extra):
     dir_ops.mkdir(parents=True, exist_ok=True)
     linhas = [
         '[operator]', 'id = "rup"', 'nome = "Ruptura"', 'agenda = "0 7 * * *"',
-        'tool = "ruptura_por_loja"', 'params = { dias = 30, incluir_risco = false }',
+        'tool = "ruptura_por_loja"', 'params = { incluir_risco = false }',
         'canais = ["mem"]', 'chave = ["CODEMP", "CODPROD"]',
     ] + [f"{k} = {json.dumps(v)}" for k, v in extra.items()] + [
         '[operator.minimo]', 'VLR_VENDIDO_PERIODO = 300',
@@ -96,13 +113,34 @@ def _executor(tmp_path, itens, canal=None, **extra):
 
 
 # --- pack estoque --------------------------------------------------------------
-def test_ruptura_sql_parametrizado(tmp_path):
-    ex, leitor, _ = _executor(tmp_path, [_item(1, 10)])
-    res = ex.tools["ruptura_por_loja"].fn(ex.ctx, dias=30, codemp=3)
+def test_ruptura_sql_segue_a_regra_do_tenant(tmp_path):
+    ex, leitor, _ = _executor(tmp_path, [_item(3, 10)])
+    res = ex.tools["ruptura_por_loja"].fn(ex.ctx, codemp=3)
     sql, params = leitor.chamadas[-1]
-    assert "EST.TIPO = 'P'" in sql and "CAB.TIPMOV = 'V'" in sql
-    assert params[1:] == [3, 3]  # CODEMP aplicado em vendas e estoque
-    assert res["rupturas"] == 1
+    assert "EST.TIPO = 'P'" in sql and "TPO.GOLSINAL = -1" in sql and "TIPMOV" not in sql
+    assert "TPO.DHALTER = CAB.DHTIPOPER" in sql            # TGFTOP versionada
+    assert "CAB.CODEMP IN (1,2,3)" in sql and "EST.CODEMP IN (1,2,3,4)" in sql
+    assert "PRO.CODGRUPOPROD IN (101001001)" in sql and "PRO.AD_CODIGO IN (?)" in sql
+    assert params[1:] == [3, 1]  # CODEMP pedido + valor de "de linha"
+    assert res["rupturas"] == 1 and res["periodo_dias"] == 90
+
+
+def test_ruptura_status_e_indices(tmp_path):
+    itens = [
+        _item(1, 1, disp=0, vlr="500"),                         # ruptura
+        _item(1, 2, disp=10, vlr="300"),                        # 10 dias -> iminente
+        _item(1, 3, disp=20, vlr="100"),                        # 20 dias -> alerta
+        _item(1, 4, disp=100, vlr="100"),                       # ok
+        _item(1, 5, disp=0, disp_cd=50, volumoso=1, vlr="999"),  # volumoso, CD atende
+    ]
+    ex, _, _ = _executor(tmp_path, itens)
+    res = ex.tools["ruptura_por_loja"].fn(ex.ctx, incluir_risco=True)
+    assert [l["STATUS"] for l in res["linhas"]] == ["RUPTURA", "IMINENTE", "ALERTA"]
+    assert (res["posicoes_ativas"], res["volumosos_cd_atende"]) == (5, 1)
+    assert res["indice_ruptura_itens"] == 20.0
+    assert res["indice_ruptura_venda"] == round(500 / 1999 * 100, 2)
+    so_ruptura = ex.tools["ruptura_por_loja"].fn(ex.ctx)
+    assert [l["CODPROD"] for l in so_ruptura["linhas"]] == [1]
 
 
 def test_ruptura_valida_limites(tmp_path):
@@ -110,6 +148,8 @@ def test_ruptura_valida_limites(tmp_path):
     from tacio.policy import PoliticaViolada
     with pytest.raises(PoliticaViolada):
         ex.tools["ruptura_por_loja"].fn(ex.ctx, dias=2)
+    with pytest.raises(PoliticaViolada, match="não é loja"):
+        ex.tools["ruptura_por_loja"].fn(ex.ctx, codemp=4)
 
 
 # --- operators -------------------------------------------------------------------

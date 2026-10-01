@@ -1,0 +1,55 @@
+# Parâmetros de ruptura — tenant Dalla.
+#
+# Fonte da verdade da regra de ruptura do Tacio. Cada cliente tem o próprio arquivo, e a
+# futura tela de configuração edita este mesmo formato.
+#
+# Conceito (convergência da especificação da Central de Compras com o painel de ruptura V9):
+#   - universo  = produto ativo "de linha" que vendeu na loja nos últimos `dias_giro` dias;
+#   - ruptura   = disponível na loja <= 0;
+#   - iminente  = cobertura <= `iminente_dias`;  alerta = cobertura <= `alerta_dias`;
+#   - volumoso  = só rompe quando o CD também está zerado (sai do CD para o cliente).
+# Venda = TOPs com GOLSINAL = -1 (vendas e devoluções de venda, líquido pelo GOLDEV).
+
+[ruptura]
+# "A loja trabalha o item": vendeu nesse período. Também é a janela da venda média por dia.
+dias_giro = 90
+iminente_dias = 15
+alerta_dias = 30
+# Lojas da rede analisadas. CD e e-commerce (9) ficam de fora.
+lojas = [1, 2, 3, 5, 6, 11, 12, 14, 15, 24]
+# Empresa do CD (estoque que abastece as lojas e atende os volumosos).
+empresa_cd = 4
+
+# O que é "de linha": TGFPRO.AD_CODIGO -> AD_STATUS (1 = De Linha).
+[ruptura.produto_ativo]
+campo = "AD_CODIGO"
+valores = [1]
+
+# Volumosos: só são ruptura quando o CD também zerou (régua de rede).
+# Grupos de porcelanato, piso, revestimento e rodapé — a mesma lista do painel V9, sem o
+# grupo 118002004 "PISOS E ATOALHADOS" (toalha de piso/jogo de banheiro, entrou lá só pelo nome).
+[ruptura.volumoso]
+grupos = [
+  101001001,  # PORCELANATO POLIDO EXTRA
+  101001002,  # PORCELANATO ESM/ACET EXTRA
+  101001003,  # PORCELANATO MADEIRA EXTRA
+  101001004,  # PORCELANATO BRILHANTE EXTRA
+  101002001,  # PORCELANATO POLIDO COMERCIAL
+  101002002,  # PORCELANATO ESM/ACET COMERCIAL
+  101002003,  # PORCELANATO MADEIRA COMERCIAL
+  101002004,  # PORCELANATO BRILHANTE COMERCIA
+  101003001,  # PISOS MB EXTRA
+  101003002,  # PISOS HD EXTRA
+  101003003,  # PISOS MV EXTRA
+  101004001,  # PISOS MB COMERCIAL
+  101004002,  # PISOS HD COMERCIAL
+  101004003,  # PISOS MV COMERCIAL
+  101005001,  # PISOS VINIL/LAMINADOS
+  102001001,  # REVEST MB EXTRA
+  102001002,  # REVEST MV EXTRA
+  102001003,  # REVEST HD EXTRA
+  102002001,  # REVEST MB COMERCIAL
+  102002002,  # REVEST MV COMERCIAL
+  102002003,  # REVEST HD COMERCIAL
+  102004002,  # RODAPES
+]

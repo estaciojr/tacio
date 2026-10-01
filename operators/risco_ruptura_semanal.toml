@@ -1,19 +1,19 @@
-# Risco: ainda tem estoque, mas cobre menos de 7 dias de venda. Visão para o comprador.
+# Risco: ainda tem estoque, mas zera dentro dos limites de iminente/alerta do tenants/*.ruptura.toml.
 [operator]
 id = "risco_ruptura_semanal"
-nome = "Risco de ruptura (cobertura < 7 dias)"
+nome = "Risco de ruptura (iminente e alerta)"
 agenda = "30 7 * * 1"             # segunda, 7h30
 tool = "ruptura_por_loja"
-params = { dias = 30, incluir_risco = true, cobertura_min_dias = 7, top = 200 }
+params = { incluir_risco = true, top = 200 }
 canais = ["console"]
 chave = ["CODEMP", "CODPROD"]
-campos_msg = ["CODEMP", "CODPROD", "DESCRPROD", "DISPONIVEL", "COBERTURA_DIAS", "VLR_VENDIDO_PERIODO"]
+campos_msg = ["CODEMP", "CODPROD", "DESCRPROD", "STATUS", "DISPONIVEL", "COBERTURA_DIAS", "VLR_VENDIDO_PERIODO"]
 avisar_resolvidos = false
 analisar_com_llm = true
-instrucao_llm = "Agrupe por loja. Destaque itens de maior valor vendido e cobertura abaixo de 3 dias."
+instrucao_llm = "Agrupe por loja. Destaque itens de maior valor vendido e os IMINENTES."
 
 [operator.filtro]
-STATUS = ["RISCO"]
+STATUS = ["IMINENTE", "ALERTA"]
 
 [operator.minimo]
 VLR_VENDIDO_PERIODO = 500

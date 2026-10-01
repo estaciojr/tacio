@@ -12,6 +12,7 @@ parâmetro; o restante vira o schema da tool que o agente enxerga.
         return ctx.politica.resultado(linhas, trunc)
 """
 import importlib
+import tomllib
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -27,6 +28,7 @@ class Contexto:
     sql: LeitorSql
     politica: Politica
     classificacao_: Classificacao | None = None
+    _regras: dict[str, dict] = field(default_factory=dict)
 
     @property
     def max_linhas(self) -> int:
@@ -37,6 +39,16 @@ class Contexto:
         if self.classificacao_ is None:
             raise PoliticaViolada("Classificação de TOPs não configurada para este cliente.")
         return self.classificacao_
+
+    def regra(self, nome: str) -> dict:
+        """Parâmetros de regra do tenant (TOML em [regras]); lidos uma vez e guardados."""
+        if nome not in self._regras:
+            arquivo = self.tenant.regras.get(nome)
+            if not arquivo:
+                raise PoliticaViolada(f"Regra '{nome}' não configurada para este cliente.")
+            with open(arquivo, "rb") as f:
+                self._regras[nome] = tomllib.load(f)
+        return self._regras[nome]
 
 
 @dataclass

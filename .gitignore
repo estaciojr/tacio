@@ -12,9 +12,8 @@ logs/
 dados/
 
 # Configuração local do tenant (DSN/usuário). O modelo versionado é dalla.toml.example;
-# a classificação de TOPs (*.tops.toml) é versionada.
+# os arquivos de regra (<cliente>.<regra>.toml: tops, ruptura...) são versionados.
 tenants/*.toml
-!tenants/*.toml.example
-!tenants/*.tops.toml
+!tenants/*.*.toml
 
 .env

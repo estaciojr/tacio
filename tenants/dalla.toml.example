@@ -65,3 +65,7 @@ para = ["compras@dalla.com.br"]
 # Classificação das TOPs por natureza: um TOML por cliente (modelo em dalla.tops.toml).
 [classificacao]
 tops = "dalla.tops.toml"
+
+# Parâmetros de regra por domínio (um TOML por regra; a futura tela de configuração edita estes arquivos).
+[regras]
+ruptura = "dalla.ruptura.toml"
