@@ -51,13 +51,17 @@ def _movimento_por_top(ctx: Contexto, ini: date, fim: date, codemp: int | None) 
     liberados = ctx.classificacao.checagens.parceiros_grupo_fornecedores
     cond_liberado = (f"CAB.CODPARC IN ({','.join(str(int(c)) for c in liberados)})"
                      if liberados else "1 = 0")
+    # Para cada natureza ligada a um campo S/N da TOP, conta as notas com o campo = 'S'.
+    flags = "".join(f", SUM(CASE WHEN TPO.{campo} = 'S' THEN 1 ELSE 0 END) AS TOPFLAG_{i}"
+                    for i, campo in enumerate(ctx.classificacao.checagens.campos_top.values()))
     sql = f"""
         SELECT CAB.CODTIPOPER,
                COUNT(*)                    AS QTD_NOTAS,
                SUM(CAB.VLRNOTA)            AS VLR_NOTAS,
                SUM(CASE WHEN GRP.CODPARC IS NOT NULL THEN 1 ELSE 0 END) AS NOTAS_PARC_GRUPO,
-               SUM(CASE WHEN {cond_liberado} THEN 1 ELSE 0 END) AS NOTAS_GRUPO_FORNECEDOR
+               SUM(CASE WHEN {cond_liberado} THEN 1 ELSE 0 END) AS NOTAS_GRUPO_FORNECEDOR{flags}
         FROM sankhya.TGFCAB CAB
+        JOIN sankhya.TGFTOP TPO ON TPO.CODTIPOPER = CAB.CODTIPOPER AND TPO.DHALTER = CAB.DHTIPOPER
         {_JOIN_GRUPO}
         WHERE {_LANCADA} AND {_TIPMOV_ENTRADA}
           AND CAB.DTNEG >= ? AND CAB.DTNEG < DATEADD(DAY, 1, ?){filtro_emp}
@@ -82,6 +86,14 @@ def _avisos(ctx: Contexto, movimento: list[dict]) -> list[str]:
                           "parceiro que é empresa do grupo.")
         elif nat == "transferencia" and grupo < notas and chk.transferencia_so_entre_empresas:
             avisos.append(f"TOP {top} (transferência): {notas - grupo} de {notas} notas com parceiro de fora do grupo.")
+        for i, (nat_campo, campo) in enumerate(chk.campos_top.items()):
+            marcadas = int(m.get(f"TOPFLAG_{i}") or 0)
+            if nat == nat_campo and marcadas < notas:
+                avisos.append(f"TOP {top} classificada como {nat_campo}, mas {campo} = 'N' na TOP "
+                              f"em {notas - marcadas} de {notas} notas.")
+            elif nat is not None and nat != nat_campo and marcadas:
+                avisos.append(f"TOP {top} classificada como {nat}, mas {campo} = 'S' na TOP "
+                              f"em {marcadas} de {notas} notas.")
     return avisos
 
 

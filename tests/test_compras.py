@@ -130,3 +130,26 @@ def test_parceiro_do_grupo_fornecedor_nao_gera_aviso(tmp_path):
 def test_dalla_libera_vero_decor():
     cl = carregar_classificacao(RAIZ / "tenants" / "dalla.tops.toml")
     assert 575577 in cl.checagens.parceiros_grupo_fornecedores
+
+
+def test_campo_da_top_diverge_da_classificacao(tmp_path):
+    # TOPFLAG_0 = notas com BONIFICACAO='S' na TOP; TOPFLAG_1 = AD_TRANSFERENCIA='S'
+    movimento = [
+        dict(_mov(1410, 4, "100"), TOPFLAG_0=1, TOPFLAG_1=0),  # revenda, mas TOP diz bonificação
+        dict(_mov(1456, 5, "100", grupo=5), TOPFLAG_0=0, TOPFLAG_1=3),  # transferência sem flag em 2
+    ]
+    ctx, tools, leitor = _ctx(tmp_path, movimento)
+    ctx.classificacao.checagens.campos_top = {"bonificacao": "BONIFICACAO",
+                                              "transferencia": "AD_TRANSFERENCIA"}
+    res = tools["entradas_por_natureza"].fn(ctx, data_inicio="2026-09-01", data_fim="2026-09-30")
+    sql = leitor.chamadas[0][0]
+    assert "TPO.DHALTER = CAB.DHTIPOPER" in sql and "TPO.BONIFICACAO = 'S'" in sql
+    avisos = " | ".join(res["avisos"])
+    assert "TOP 1410 classificada como revenda, mas BONIFICACAO = 'S' na TOP em 1 de 4" in avisos
+    assert "TOP 1456 classificada como transferencia, mas AD_TRANSFERENCIA = 'N' na TOP em 2 de 5" in avisos
+
+
+def test_dalla_liga_campos_da_top():
+    cl = carregar_classificacao(RAIZ / "tenants" / "dalla.tops.toml")
+    assert cl.checagens.campos_top == {"bonificacao": "BONIFICACAO", "transferencia": "AD_TRANSFERENCIA"}
+    assert cl.natureza_da_top(1421) == "outras" and cl.natureza_da_top(1431) == "revenda"

@@ -3,6 +3,7 @@
 Fica num TOML por tenant (ex.: tenants/dalla.tops.toml), fora do código: cada cliente tem
 o próprio, e uma futura tela de configuração edita o mesmo formato.
 """
+import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -26,6 +27,9 @@ class Checagens:
     # Empresas do grupo que vendem de verdade para as outras (ex.: importadora do grupo):
     # notas de revenda desses parceiros não geram aviso.
     parceiros_grupo_fornecedores: list[int] = field(default_factory=list)
+    # Natureza -> campo S/N da TGFTOP que deve concordar com ela (ex.: bonificacao =
+    # "BONIFICACAO"). Divergência nos dois sentidos vira aviso.
+    campos_top: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -63,6 +67,11 @@ def _checagens(raw: dict) -> Checagens:
     chk = Checagens(**raw)
     # Parceiros são interpolados no SQL: só inteiros passam daqui.
     chk.parceiros_grupo_fornecedores = [int(c) for c in chk.parceiros_grupo_fornecedores]
+    # Campos da TOP também são interpolados: só identificadores simples.
+    for nat, campo in chk.campos_top.items():
+        if not re.fullmatch(r"[A-Z_][A-Z0-9_]*", str(campo).upper()):
+            raise ValueError(f"checagens.campos_top.{nat}: campo '{campo}' inválido.")
+    chk.campos_top = {nat: str(c).upper() for nat, c in chk.campos_top.items()}
     return chk
 
 
