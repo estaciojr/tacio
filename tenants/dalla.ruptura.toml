@@ -19,13 +19,16 @@ alerta_dias = 30
 lojas = [1, 2, 3, 5, 6, 11, 12, 14, 15, 24]
 # Empresa do CD (estoque que abastece as lojas e atende os volumosos).
 empresa_cd = 4
-# Locais da TGFEST que contam como estoque à venda (vazio = todos). Fora de propósito:
-# 104 Reserva-encomenda e 105 Entrada-encomenda (venda já feita aguardando mercadoria),
-# 106 Almoxarifado (uso interno), 198/199 ATEC (assistência técnica), 171 Tintas manipuladas.
-locais_estoque = [
+# Locais da TGFEST que contam como estoque à venda (vazio = todos), separados por loja e CD.
+# Fora de propósito: 104 Reserva-encomenda e 105 Entrada-encomenda (venda já feita aguardando
+# mercadoria), 106 Almoxarifado (uso interno), 198/199 ATEC (assistência técnica),
+# 171 Tintas manipuladas. Definido com o usuário em 05/10/2026.
+locais_estoque_loja = [
   101,  # SHOWROOM
-  102,  # EXPEDIÇÃO CD
   103,  # EXPEDIÇÃO LOJA
+]
+locais_estoque_cd = [
+  102,  # EXPEDIÇÃO CD
 ]
 
 # Venda sob encomenda não consome o estoque da loja: fica fora do giro e da venda média.
