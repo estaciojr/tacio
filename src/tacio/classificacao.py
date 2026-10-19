@@ -36,6 +36,9 @@ class Checagens:
 class Classificacao:
     naturezas: dict[str, Natureza]
     tops: dict[int, str]
+    # TOPs de pedido (TIPMOV 'O') ficam à parte: misturadas em `tops`, as tools de nota
+    # passariam a contar pedido como compra.
+    tops_pedido: dict[int, str] = field(default_factory=dict)
     checagens: Checagens = field(default_factory=Checagens)
     pendencias: list[str] = field(default_factory=list)
 
@@ -59,6 +62,12 @@ class Classificacao:
     def tops_de(self, naturezas: list[str]) -> list[int]:
         return sorted(t for t, n in self.tops.items() if n in naturezas)
 
+    def natureza_do_pedido(self, codtipoper: int) -> str | None:
+        return self.tops_pedido.get(codtipoper)
+
+    def tops_pedido_de(self, naturezas: list[str]) -> list[int]:
+        return sorted(t for t, n in self.tops_pedido.items() if n in naturezas)
+
     def tops_negativas(self, tops: list[int]) -> list[int]:
         return [t for t in tops if self.naturezas[self.tops[t]].sinal < 0]
 
@@ -75,6 +84,16 @@ def _checagens(raw: dict) -> Checagens:
     return chk
 
 
+def _tops(raw: dict, naturezas: dict[str, Natureza], secao: str) -> dict[int, str]:
+    tops: dict[int, str] = {}
+    for chave, nat in raw.items():
+        codigo = int(chave)  # TOPs são interpoladas no SQL: só inteiros passam daqui
+        if nat not in naturezas:
+            raise ValueError(f"[{secao}] TOP {codigo}: natureza '{nat}' não definida em [naturezas].")
+        tops[codigo] = nat
+    return tops
+
+
 def carregar_classificacao(caminho: str | Path) -> Classificacao:
     with open(caminho, "rb") as f:
         raw = tomllib.load(f)
@@ -86,15 +105,10 @@ def carregar_classificacao(caminho: str | Path) -> Classificacao:
     for n in naturezas.values():
         if n.sinal not in (1, -1):
             raise ValueError(f"Natureza '{n.id}': sinal deve ser 1 ou -1.")
-    tops: dict[int, str] = {}
-    for chave, nat in raw.get("tops", {}).items():
-        codigo = int(chave)  # TOPs são interpoladas no SQL: só inteiros passam daqui
-        if nat not in naturezas:
-            raise ValueError(f"TOP {codigo}: natureza '{nat}' não definida em [naturezas].")
-        tops[codigo] = nat
     return Classificacao(
         naturezas=naturezas,
-        tops=tops,
+        tops=_tops(raw.get("tops", {}), naturezas, "tops"),
+        tops_pedido=_tops(raw.get("tops_pedido", {}), naturezas, "tops_pedido"),
         checagens=_checagens(raw.get("checagens", {})),
         pendencias=list(raw.get("pendencias", {}).get("itens", [])),
     )

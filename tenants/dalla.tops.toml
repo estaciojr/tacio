@@ -67,13 +67,29 @@ nome = "Outras entradas (remessa, consignado, conserto...)"
 sinal = 1
 compra = false
 
+# Por ora só usadas nos pedidos ([tops_pedido]); decididas pelo usuário em 19/10/2026.
+[naturezas.encomenda]
+nome = "Compra sob encomenda (venda já feita ao cliente)"
+sinal = 1
+compra = false
+
+[naturezas.sellers]
+nome = "Compra de revenda - sellers"
+sinal = 1
+compra = false
+
+[naturezas.orcamento]
+nome = "Orçamento de compra (ainda não é pedido)"
+sinal = 1
+compra = false
+
 # --- TOP -> natureza ---------------------------------------------------------------
 [tops]
 # Revenda
 1430 = "revenda"        # COMPRA - REV. CD (2.531 / 47,3 mi)
 1410 = "revenda"        # COMPRA - REVENDA (2.126 / 31,7 mi)
 1431 = "revenda"        # COMPRA - REVENDA VLR. BONF. (BIANCO) CD (429 / 8,4 mi) — revenda (confirmado 05/10/2026); tem personalização de VLRUNIT a investigar
-1479 = "revenda"        # COMPRA - REVENDA - SELLERS (41 / 253 mil)
+1479 = "sellers"        # COMPRA - REVENDA - SELLERS (41 / 253 mil) — natureza própria, igual ao pedido 1379 (usuário, 19/10/2026)
 1497 = "revenda"        # NOTA DE COMPRA (IMPORTAÇÃO - DI) (1 / 71 mil)
 1487 = "revenda"        # COMPRA - REVENDA (GENERICO) — inativa
 1443 = "revenda"        # ENTRADA MERC. REV. ACOBERTAMENTO CD — inativa
@@ -168,6 +184,32 @@ compra = false
 1421 = "outras"         # ENTRADA AMOSTRA GRATIS — TGFTOP.BONIFICACAO = N, então não é bonificação
 1447 = "outras"         # ENTRADA INDUSTRIALIZACAO EFETUADA — inativa; fora de compra (confirmado 05/10/2026)
 1483 = "outras"         # ENTRADA NF EMISSAO PROPRIA - COMPRA (5 / 165 mil, parceiro Dalla Serra) — NÃO é compra (confirmado 01/10/2026)
+
+# --- pedidos de compra (TIPMOV 'O') ------------------------------------------------
+# Separado de [tops]: usado só por pedidos_pendentes. Montado e confirmado em 19/10/2026
+# (pedidos / pendentes em 12 meses até 19/10/2026).
+[tops_pedido]
+1310 = "revenda"        # PED COMP - REVENDA (2.497 / 155)
+1311 = "revenda"        # PED COMP - REVENDA VLR. BONIF. (BIANCO) (108 / 0)
+1324 = "encomenda"      # PED COMP - VENDAS SOB ENCOMENDA (119 / 4)
+1379 = "sellers"        # PED COMP - REVENDA - SELLERS (38 / 0)
+1312 = "bonificacao"    # PED COMP - BONIFICADO VPC (85 / 7)
+1313 = "bonificacao"    # PED COMP - BONIFICADO REC. MARGEM (27 / 4)
+1319 = "bonificacao"    # PED COMP - BONIFICACAO ENXOVAL (4 / 0)
+1320 = "bonificacao"    # PED COMP - BONIFICACAO ATEC (6 / 0)
+1321 = "bonificacao"    # PED COMP - BONIFICACAO PDV PROMOCIONAL (18 / 2)
+1322 = "bonificacao"    # PED COMP - BONIFICACAO SHOWROOM (4 / 0)
+1323 = "bonificacao"    # PED COMP - BONIFICACAO DE VERBA (23 / 0)
+1314 = "consumo"        # PED COMP - CONSUMO (1.288 / 129)
+1317 = "consumo"        # PED COMP - COMBUSTIVEIS (630 / 76)
+1318 = "consumo"        # PED COMP - MANUTENÇÃO DE VEÍCULO (684 / 38)
+1316 = "servico"        # PED COMP - SERVICOS (4.915 / 365)
+1315 = "imobilizado"    # PED COMP - IMOBILIZADO (1 / 0)
+1345 = "imobilizado"    # PED COMP - MATERIAL P/ OBRA (394 / 37)
+1305 = "transferencia"  # SOLICITAÇÃO DE TRANSFERÊNCIA CD-LOJA (2.367 / 120)
+1306 = "transferencia"  # SOLICITAÇÃO DE TRANSFERÊNCIA LOJA - LOJA (318 / 20)
+1304 = "orcamento"      # ORCAMENTO DE COMPRA P/ ENCOMENDA (2.687 / 1.287) — pendência nunca baixa
+1302 = "orcamento"      # ORCAMENTO DE COMPRA USO/CONSUMO (186 / 51)
 
 # --- checagens automáticas (o Tacio avisa em vez de contar errado) ----------------
 [checagens]

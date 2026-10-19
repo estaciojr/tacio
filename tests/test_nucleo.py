@@ -99,6 +99,9 @@ sinal = -1
 1410 = "revenda"
 1456 = "transferencia"
 1500 = "devolucao_compra"
+[tops_pedido]
+1310 = "revenda"
+1305 = "transferencia"
 """
 
 

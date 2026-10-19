@@ -153,3 +153,109 @@ def test_dalla_liga_campos_da_top():
     cl = carregar_classificacao(RAIZ / "tenants" / "dalla.tops.toml")
     assert cl.checagens.campos_top == {"bonificacao": "BONIFICACAO", "transferencia": "AD_TRANSFERENCIA"}
     assert cl.natureza_da_top(1421) == "outras" and cl.natureza_da_top(1431) == "revenda"
+
+
+# --- pedidos_pendentes -----------------------------------------------------------
+class LeitorPedidos:
+    """Responde cada consulta de pedidos_pendentes pelo trecho que a identifica."""
+
+    def __init__(self, resumo=None, aguardando=None, nao_classificadas=None):
+        self.chamadas = []
+        self.resumo = resumo or []
+        self.aguardando = aguardando or []
+        self.nao_classificadas = nao_classificadas or []
+
+    def consultar(self, sql, params=(), max_linhas=200):
+        validar_somente_leitura(sql)
+        self.chamadas.append((sql, list(params)))
+        if "GROUP BY B.SITUACAO_PEDIDO" in sql:
+            return self.resumo, False
+        if "DIAS_AGUARDANDO" in sql:
+            return self.aguardando, False
+        if "WITH ITENS" not in sql:
+            return self.nao_classificadas, False
+        return [{"NUNOTA": 1, "CODTIPOPER": 1310, "VLR_SALDO": Decimal("10.456")}], False
+
+
+def _ctx_pedidos(tmp_path, **kw):
+    leitor = LeitorPedidos(**kw)
+    tenant = _tenant(tmp_path)
+    return montar_contexto(tenant, leitor), carregar_tools(tenant), leitor
+
+
+def _sit(situacao, pedidos, vlr, **extra):
+    return dict(SITUACAO_PEDIDO=situacao, PEDIDOS=pedidos, ITENS=pedidos * 2,
+                VLR_SALDO=Decimal(vlr), **extra)
+
+
+def test_dalla_classifica_pedidos():
+    cl = carregar_classificacao(RAIZ / "tenants" / "dalla.tops.toml")
+    assert cl.tops_pedido_de(["revenda"]) == [1310, 1311]
+    assert cl.natureza_do_pedido(1324) == "encomenda" and cl.natureza_do_pedido(1379) == "sellers"
+    assert cl.natureza_do_pedido(1304) == "orcamento"
+    assert cl.natureza_da_top(1479) == "sellers" and 1479 not in cl.tops_de(["revenda"])
+    # pedido não pode vazar para as tools de nota
+    assert not {1310, 1311, 1324, 1379} & set(cl.tops_de(list(cl.naturezas)))
+
+
+def test_pedidos_padrao_revenda_so_confirmados(tmp_path):
+    ctx, tools, leitor = _ctx_pedidos(tmp_path)
+    res = tools["pedidos_pendentes"].fn(ctx, codparc=99)
+    sql, params = leitor.chamadas[0]
+    assert "CAB.CODTIPOPER IN (1310)" in sql and "1305" not in sql
+    assert "B.SITUACAO_PEDIDO = 'confirmado'" in sql
+    assert "CAB.CODEMP IN (?)" in sql and "CAB.CODPARC = ?" in sql and params == [1, 99]
+    assert res["agrupar"] == "pedido" and res["naturezas"] == ["revenda"]
+    assert res["linhas"][0]["NATUREZA"] == "revenda" and res["linhas"][0]["VLR_SALDO"] == 10.46
+
+
+def test_pedidos_com_produto_detalha_por_item(tmp_path):
+    ctx, tools, leitor = _ctx_pedidos(tmp_path)
+    res = tools["pedidos_pendentes"].fn(ctx, codprod=5418, situacao="atrasados")
+    sql, params = leitor.chamadas[0]
+    assert res["agrupar"] == "item" and "B.SEQUENCIA" in sql and "B.DIAS_ATRASO > 0" in sql
+    assert "ITE.CODPROD = ?" in sql and params[-1] == 5418
+
+
+def test_pedidos_parametros_invalidos(tmp_path):
+    ctx, tools, _ = _ctx_pedidos(tmp_path)
+    with pytest.raises(PoliticaViolada, match="situacao"):
+        tools["pedidos_pendentes"].fn(ctx, situacao="xyz")
+    with pytest.raises(PoliticaViolada, match="agrupar"):
+        tools["pedidos_pendentes"].fn(ctx, agrupar="xyz")
+    with pytest.raises(PoliticaViolada, match="Nenhuma TOP de pedido"):
+        tools["pedidos_pendentes"].fn(ctx, naturezas=["devolucao_compra"])
+
+
+def test_pedidos_nao_confirmados_ficam_fora_da_conta(tmp_path):
+    resumo = [
+        _sit("confirmado", 10, "1000", VLR_ATRASADO=Decimal("300"), PEDIDOS_ATRASADOS=3,
+             VLR_EM_RECEBIMENTO=Decimal("50"), PEDIDOS_SEM_PREVISAO=2, PEDIDOS_RECEBIMENTO_PARADO=1),
+        _sit("aguardando_autorizacao", 4, "523488.26"),
+        _sit("nao_confirmado", 2, "80"),
+    ]
+    aguardando = [{"NUNOTA": 7, "VLR_SALDO": Decimal("1.005"), "SOLICITANTE": "RONEI.MAIA"}]
+    ctx, tools, _ = _ctx_pedidos(tmp_path, resumo=resumo, aguardando=aguardando)
+    res = tools["pedidos_pendentes"].fn(ctx)
+    assert res["resumo"] == {"pedidos": 10, "itens": 20, "vlr_saldo": 1000.0, "vlr_atrasado": 300.0,
+                             "pedidos_atrasados": 3, "vlr_em_recebimento": 50.0}
+    assert res["aguardando_autorizacao"][0]["SOLICITANTE"] == "RONEI.MAIA"
+    avisos = " | ".join(res["avisos"])
+    assert "4 pedidos aguardando autorização (R$ 523.488,26)" in avisos
+    assert "2 pedidos não confirmados e sem pedido de liberação (R$ 80,00)" in avisos
+    assert "2 pedidos sem previsão de entrega" in avisos
+    assert "1 pedidos com nota de entrada digitada há mais de 30 dias" in avisos
+
+
+def test_pedido_de_top_nao_classificada_avisa(tmp_path):
+    ctx, tools, leitor = _ctx_pedidos(tmp_path, nao_classificadas=[{"CODTIPOPER": 1399, "PEDIDOS": 5}])
+    res = tools["pedidos_pendentes"].fn(ctx)
+    sql = leitor.chamadas[-1][0]
+    assert "NOT IN (1305,1310)" in sql
+    assert "TOP de pedido 1399 não classificada: 5 pedidos" in " | ".join(res["avisos"])
+
+
+def test_naturezas_compra_mostra_tops_de_pedido(tmp_path):
+    ctx, tools, _ = _ctx_pedidos(tmp_path)
+    por_nat = {l["NATUREZA"]: l for l in tools["naturezas_compra"].fn(ctx)["linhas"]}
+    assert por_nat["revenda"]["TOPS"] == "1410" and por_nat["revenda"]["TOPS_PEDIDO"] == "1310"
