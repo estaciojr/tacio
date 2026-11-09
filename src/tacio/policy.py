@@ -96,3 +96,12 @@ def parse_data(valor: str, campo: str = "data") -> date:
         except ValueError:
             continue
     raise PoliticaViolada(f"{campo} inválida: '{valor}'. Use AAAA-MM-DD.")
+
+
+def validar_periodo(data_inicio: str, data_fim: str, max_dias: int = 366) -> tuple[date, date]:
+    ini, fim = parse_data(data_inicio, "data_inicio"), parse_data(data_fim, "data_fim")
+    if ini > fim:
+        raise PoliticaViolada("data_inicio é posterior a data_fim.")
+    if (fim - ini).days > max_dias:
+        raise PoliticaViolada(f"Período máximo de {max_dias} dias.")
+    return ini, fim

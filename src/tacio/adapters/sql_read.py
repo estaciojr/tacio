@@ -1,4 +1,5 @@
 """Leitura no SQL Server do Sankhya. Somente SELECT, sempre com timeout e limite de linhas."""
+import re
 from typing import Any, Protocol, Sequence
 
 import sqlglot
@@ -11,6 +12,8 @@ _PROIBIDOS = (
     exp.Insert, exp.Update, exp.Delete, exp.Merge, exp.Create, exp.Drop,
     exp.Alter, exp.Command, exp.Into, exp.TruncateTable,
 )
+# "sankhya." qualificando tabela; não pega nome de pacote como 'br.com.sankhya.x'.
+_SCHEMA_RE = re.compile(r"(?<![\w.])sankhya\.(?=[A-Za-z_])", re.IGNORECASE)
 
 
 def validar_somente_leitura(sql: str, tabelas_permitidas: Sequence[str] | None = None) -> None:
@@ -36,6 +39,13 @@ def validar_somente_leitura(sql: str, tabelas_permitidas: Sequence[str] | None =
         fora = sorted(usadas - permitidas)
         if fora:
             raise PoliticaViolada(f"Tabelas não liberadas para consulta livre: {', '.join(fora)}")
+
+
+def aplicar_schema(sql: str, schema: str) -> str:
+    """Troca o schema das tabelas: os packs escrevem sempre sankhya.TABELA."""
+    if schema.lower() == "sankhya":
+        return sql
+    return _SCHEMA_RE.sub(f"{schema}.", sql)
 
 
 class LeitorSql(Protocol):
@@ -67,7 +77,7 @@ class SqlServerLeitor:
         validar_somente_leitura(sql)
         with self._conectar() as conn:
             cur = conn.cursor()
-            cur.execute(sql, *params)
+            cur.execute(aplicar_schema(sql, self.cfg.schema), *params)
             cols = [c[0] for c in cur.description]
             rows = cur.fetchmany(max_linhas + 1)
         truncado = len(rows) > max_linhas

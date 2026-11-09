@@ -2,7 +2,7 @@
 [tenant]
 id = "dalla"
 nome = "Dalla Home Center"
-packs = ["meta", "compras", "estoque"]
+packs = ["meta", "compras", "estoque", "vendas"]
 # Empresas (CODEMP) que este servidor pode consultar. Vazio = todas.
 codemp_permitidas = []
 
@@ -13,6 +13,8 @@ senha_env = "TACIO_SQL_PWD"
 timeout_s = 20
 # true = SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED (não trava a operação)
 leitura_suja = true
+# Schema das tabelas do ERP neste cliente (padrão: sankhya).
+schema = "sankhya"
 
 [politica]
 max_linhas = 200
@@ -69,6 +71,7 @@ tops = "dalla.tops.toml"
 # Parâmetros de regra por domínio (um TOML por regra; a futura tela de configuração edita estes arquivos).
 [regras]
 ruptura = "dalla.ruptura.toml"
+vendas = "dalla.vendas.toml"
 
 # Login OAuth no transporte HTTP (opcional). Sem esta seção, `--transport http` usa o token fixo [http].
 # Cada pessoa entra com a senha dela do Sankhya (conferida no MobileLoginSP); o Tacio não guarda senha.

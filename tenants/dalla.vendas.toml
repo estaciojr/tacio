@@ -1,0 +1,13 @@
+# O que conta como venda nas tools do pack vendas.
+# Universo: notas confirmadas de TOP com GOLSINAL = -1; a devolução subtrai pelo GOLDEV.
+
+# Segmentos ficam fora da conta padrão e só aparecem quando a pergunta é sobre eles.
+# tops = operações do segmento; empresas = toda venda/devolução dessas empresas também é dele.
+[vendas.segmentos.vero]
+nome = "Venda da Vero / Mega Design"
+tops = [1116]
+empresas = [13, 18, 25]
+
+[vendas.segmentos.servicos]
+nome = "CT-e e NFS-e sobre a venda"
+tops = [1119, 1120, 1125]

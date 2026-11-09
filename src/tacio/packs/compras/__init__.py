@@ -11,7 +11,7 @@ marcadas como compra (na Dalla, só 'revenda'); o agente pode pedir outras, como
 from datetime import date
 
 from ...pack import Contexto, Pack, filtro_in
-from ...policy import PoliticaViolada, parse_data
+from ...policy import PoliticaViolada, validar_periodo
 
 pack = Pack("compras", "Análise de compras, transferências e fornecedores")
 
@@ -26,15 +26,6 @@ _JOIN_GRUPO = ("LEFT JOIN (SELECT DISTINCT EMP.CODPARC FROM sankhya.TSIEMP EMP) 
 def _in_tops(tops: list[int]) -> str:
     # TOPs vêm da classificação, já convertidas para int na carga: seguro interpolar.
     return ",".join(str(int(t)) for t in tops)
-
-
-def _periodo(data_inicio: str, data_fim: str) -> tuple[date, date]:
-    ini, fim = parse_data(data_inicio, "data_inicio"), parse_data(data_fim, "data_fim")
-    if ini > fim:
-        raise PoliticaViolada("data_inicio é posterior a data_fim.")
-    if (fim - ini).days > 366:
-        raise PoliticaViolada("Período máximo de 366 dias.")
-    return ini, fim
 
 
 def _tops_das_naturezas(ctx: Contexto, naturezas: list[str] | None) -> tuple[list[str], list[int]]:
@@ -137,7 +128,7 @@ Inclui 'avisos' quando há TOP de entrada não classificada ou fora do padrão.
 def compras_por_fornecedor(ctx: Contexto, data_inicio: str, data_fim: str,
                            codemp: int | None = None, top: int = 20,
                            naturezas: list[str] | None = None) -> dict:
-    ini, fim = _periodo(data_inicio, data_fim)
+    ini, fim = validar_periodo(data_inicio, data_fim)
     top = max(1, min(top, ctx.max_linhas))
     nats, tops = _tops_das_naturezas(ctx, naturezas)
     negativas = ctx.classificacao.tops_negativas(tops)
@@ -170,7 +161,7 @@ Devoluções aparecem com valor negativo. Inclui 'avisos' de TOPs não classific
 """)
 def entradas_por_natureza(ctx: Contexto, data_inicio: str, data_fim: str,
                           codemp: int | None = None) -> dict:
-    ini, fim = _periodo(data_inicio, data_fim)
+    ini, fim = validar_periodo(data_inicio, data_fim)
     cl = ctx.classificacao
     movimento = _movimento_por_top(ctx, ini, fim, codemp)
     totais: dict[str, dict] = {}

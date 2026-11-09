@@ -1,5 +1,6 @@
 """Configuração do tenant: um arquivo TOML por cliente."""
 import os
+import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -29,6 +30,12 @@ class SqlConfig:
     senha_env: str = "TACIO_SQL_PWD"
     timeout_s: int = 20
     leitura_suja: bool = True
+    schema: str = "sankhya"  # schema das tabelas do ERP neste cliente
+
+    def __post_init__(self) -> None:
+        # O schema é interpolado no SQL: só identificador simples passa daqui.
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", self.schema):
+            raise ValueError(f"[sql] schema '{self.schema}' inválido.")
 
     def connection_string(self) -> str:
         pwd = ler_variavel(self.senha_env)
