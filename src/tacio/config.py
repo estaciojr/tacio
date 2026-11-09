@@ -52,6 +52,19 @@ class HttpConfig:
 
 
 @dataclass
+class OAuthConfig:
+    """Login OAuth no transporte HTTP (substitui o token fixo). Senha conferida no Sankhya."""
+    url_publica: str                  # https://... (só http://localhost para teste local)
+    sankhya_url: str                  # onde o login do usuário é conferido (MobileLoginSP)
+    cnpjs: list[str]                  # CNPJs aceitos na tela de login
+    banco: str = "dados/oauth.db"     # clientes, códigos e tokens (só hashes)
+    usuarios_permitidos: list[str] = field(default_factory=list)  # vazio = qualquer usuário do Sankhya
+    usuarios_sql_livre: list[str] = field(default_factory=list)   # quem pode usar sql_consulta
+    ttl_acesso_s: int = 3600
+    ttl_refresh_dias: int = 30
+
+
+@dataclass
 class OperatorsConfig:
     diretorio: str = "operators"
     estado: str = "dados/operators.db"
@@ -75,6 +88,7 @@ class TenantConfig:
     classificacao_tops: str | None = None
     # Parâmetros de regra por domínio: nome -> TOML (ex.: {"ruptura": ".../dalla.ruptura.toml"}).
     regras: dict[str, str] = field(default_factory=dict)
+    oauth: OAuthConfig | None = None
 
 
 def carregar(caminho: str | Path) -> TenantConfig:
@@ -99,4 +113,5 @@ def carregar(caminho: str | Path) -> TenantConfig:
         canais=raw.get("canais", {}),
         classificacao_tops=tops,
         regras=regras,
+        oauth=OAuthConfig(**raw["oauth"]) if "oauth" in raw else None,
     )

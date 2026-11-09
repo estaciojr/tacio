@@ -69,3 +69,15 @@ tops = "dalla.tops.toml"
 # Parâmetros de regra por domínio (um TOML por regra; a futura tela de configuração edita estes arquivos).
 [regras]
 ruptura = "dalla.ruptura.toml"
+
+# Login OAuth no transporte HTTP (opcional). Sem esta seção, `--transport http` usa o token fixo [http].
+# Cada pessoa entra com a senha dela do Sankhya (conferida no MobileLoginSP); o Tacio não guarda senha.
+# [oauth]
+# url_publica = "https://tacio.exemplo.com.br"   # HTTPS obrigatório fora do localhost
+# sankhya_url = "http://sankhya.exemplo.com.br:8180"
+# cnpjs = ["00000000000100"]
+# banco = "dados/oauth.db"
+# usuarios_permitidos = []        # NOMUSU liberados; vazio = qualquer usuário válido do Sankhya
+# usuarios_sql_livre = []         # quem pode usar sql_consulta
+# ttl_acesso_s = 3600
+# ttl_refresh_dias = 30

@@ -14,10 +14,12 @@ class Auditoria:
         self._lock = threading.Lock()
 
     def registrar(self, tool: str, params: dict[str, Any], *, ms: float,
-                  linhas: int | None = None, erro: str | None = None) -> None:
+                  linhas: int | None = None, erro: str | None = None,
+                  usuario: str | None = None) -> None:
         evento = {
             "ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
             "tenant": self.tenant,
+            "usuario": usuario,
             "tool": tool,
             "params": params,
             "ms": round(ms, 1),
