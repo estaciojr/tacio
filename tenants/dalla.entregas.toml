@@ -1,0 +1,15 @@
+# O que conta como entrega nas tools do pack entregas.
+[entregas]
+# Nota que acompanha a mercadoria até o cliente (simples remessa de entrega futura).
+tops_remessa = [1154]
+# AD_OCOENT: ocorrências que dão o item como entregue ao cliente.
+ocorrencias_entregue = [1]
+# AD_OCOENT: abertura de SAM. O item continua pendente, mas é contado à parte.
+ocorrencias_sam = [6]
+# As duas etapas do SAM: pedido de separação para repor ao cliente e entrada do produto avariado.
+tops_reposicao_sam = [1065]
+tops_entrada_sam = [1219]
+# Dias de nota de remessa considerados nas consultas.
+janela_dias = 180
+# Passou disso da previsão sem nenhuma ocorrência: "sem baixa" em vez de atrasada.
+dias_sem_baixa = 30
