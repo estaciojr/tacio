@@ -1,0 +1,6 @@
+# Segmentos ficam fora de contas em aberto e fluxo previsto e só aparecem quando a pergunta é sobre eles.
+# tipo = receber ou pagar; naturezas = TGFNAT do recorte.
+[financeiro.segmentos.adiantamento_fornecedor]
+nome = "Adiantamento a fornecedor"
+tipo = "receber"
+naturezas = [2020510]
