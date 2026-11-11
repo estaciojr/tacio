@@ -80,7 +80,7 @@ financeiro = "dalla.financeiro.toml"
 # [oauth]
 # url_publica = "https://tacio.exemplo.com.br"   # HTTPS obrigatório fora do localhost
 # sankhya_url = "http://sankhya.exemplo.com.br:8180"
-# cnpjs = ["00000000000100"]
+# cnpjs = ["00000000000100"]        # vazio ou ausente = a tela não pede CNPJ
 # banco = "dados/oauth.db"
 # usuarios_permitidos = []        # NOMUSU liberados; vazio = qualquer usuário válido do Sankhya
 # usuarios_sql_livre = []         # quem pode usar sql_consulta

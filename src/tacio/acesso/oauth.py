@@ -2,7 +2,7 @@
 
 Fluxo: o assistente (Claude, ChatGPT) registra-se sozinho, manda o usuário para /authorize,
 o SDK chama `authorize()`, que guarda o pedido e devolve a URL da tela /login. A tela pede
-CNPJ, usuário e senha, confere a senha no Sankhya (sankhya_login) e devolve um código ao
+usuário e senha (e o CNPJ, se o tenant listar CNPJs), confere a senha no Sankhya (sankhya_login) e devolve um código ao
 assistente, que o troca por tokens em /token. A senha e a sessão do Sankhya não são guardadas.
 """
 import asyncio
@@ -105,7 +105,7 @@ class ProvedorTacio:
         cliente, params = lido
         if cliente is None:
             return None, "Aplicativo não reconhecido. Volte ao assistente e conecte de novo."
-        if so_digitos(cnpj) not in self.cnpjs:
+        if self.cnpjs and so_digitos(cnpj) not in self.cnpjs:
             return None, "CNPJ não habilitado para o Tacio."
         if self.bloqueado(usuario):
             return None, "Muitas tentativas com este usuário. Aguarde 15 minutos."
@@ -227,13 +227,13 @@ button{{width:100%;margin-top:22px;padding:12px;border:0;border-radius:8px;backg
 <div class="destino"><small>O acesso será entregue a</small><b>{destino}</b>
 <small>O aplicativo se apresenta como “{nome_app}”. Confira o endereço acima antes de digitar a senha.</small></div>
 <p>Entre com o seu usuário do Sankhya. A conexão poderá <b>consultar</b>:</p>
-<ul><li>compras, fornecedores e naturezas</li><li>estoque e ruptura por loja</li></ul>
+<ul><li>vendas, compras, fornecedores e naturezas</li><li>estoque e ruptura por loja</li>
+<li>entregas e SAM</li><li>contas a pagar e a receber, fluxo e saldo das contas</li></ul>
 <p>Nada é incluído, alterado ou excluído no ERP. A sua senha não fica guardada no Tacio.</p>
 {erro}
 <form method="post" action="/login" autocomplete="on">
 <input type="hidden" name="pedido" value="{pedido}">
-<label for="cnpj">CNPJ da empresa</label><input id="cnpj" name="cnpj" inputmode="numeric" required value="{cnpj}">
-<label for="usuario">Usuário</label><input id="usuario" name="usuario" autocomplete="username" required value="{usuario}">
+{campo_cnpj}<label for="usuario">Usuário</label><input id="usuario" name="usuario" autocomplete="username" required value="{usuario}">
 <label for="senha">Senha</label><input id="senha" name="senha" type="password" autocomplete="current-password" required>
 <button type="submit">Autorizar acesso</button>
 </form>
@@ -259,9 +259,11 @@ def _pagina(provedor: ProvedorTacio, pedido: str, erro: str | None = None,
     cliente, params = lido
     destino = urlparse(str(params.redirect_uri)).hostname or str(params.redirect_uri)
     nome_app = (cliente.client_name if cliente and cliente.client_name else "aplicativo sem nome")
+    campo_cnpj = ('<label for="cnpj">CNPJ da empresa</label><input id="cnpj" name="cnpj" inputmode="numeric" '
+                  f'required value="{html.escape(cnpj)}">\n') if provedor.cnpjs else ""
     corpo = _PAGINA.format(
         destino=html.escape(destino), nome_app=html.escape(nome_app), pedido=html.escape(pedido),
-        cnpj=html.escape(cnpj), usuario=html.escape(usuario),
+        campo_cnpj=campo_cnpj, usuario=html.escape(usuario),
         erro=f'<div class="erro">{html.escape(erro)}</div>' if erro else "")
     return HTMLResponse(corpo, status_code=status, headers=_CABECALHOS)
 

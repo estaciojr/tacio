@@ -63,7 +63,7 @@ class OAuthConfig:
     """Login OAuth no transporte HTTP (substitui o token fixo). Senha conferida no Sankhya."""
     url_publica: str                  # https://... (só http://localhost para teste local)
     sankhya_url: str                  # onde o login do usuário é conferido (MobileLoginSP)
-    cnpjs: list[str]                  # CNPJs aceitos na tela de login
+    cnpjs: list[str] = field(default_factory=list)  # CNPJs aceitos na tela de login; vazio = não pede CNPJ
     banco: str = "dados/oauth.db"     # clientes, códigos e tokens (só hashes)
     usuarios_permitidos: list[str] = field(default_factory=list)  # vazio = qualquer usuário do Sankhya
     usuarios_sql_livre: list[str] = field(default_factory=list)   # quem pode usar sql_consulta

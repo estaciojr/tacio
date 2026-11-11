@@ -207,6 +207,16 @@ def test_login_recusado_fica_na_tela(servidor, dados, mensagem):
     assert "certa" not in corpo and "errada" not in corpo  # senha não volta para a página
 
 
+def test_sem_cnpjs_a_tela_pede_so_usuario_e_senha(servidor):
+    url = servidor["url"]
+    servidor["provedor"].cnpjs = set()
+    pedido, _, _ = _iniciar(url, _registrar(url))
+    st, _, corpo = _req(f"{url}/login?pedido={pedido}")
+    assert st == 200 and 'name="cnpj"' not in corpo and 'name="usuario"' in corpo
+    st, h, _ = _req(f"{url}/login", {"pedido": pedido, "usuario": "ANA", "senha": "certa"})
+    assert st == 302 and h["location"].startswith(REDIRECT)
+
+
 def test_bloqueia_apos_cinco_falhas(servidor):
     url = servidor["url"]
     pedido, _, _ = _iniciar(url, _registrar(url))
