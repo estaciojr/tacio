@@ -33,10 +33,33 @@ def _usuario_atual() -> str | None:
     return token.subject if token else None
 
 
-def _envolver(td: ToolDef, ctx: Contexto, auditoria: Auditoria, sql_livre_para: set[str] | None = None):
+def _liberados_por_usuario(tenant: TenantConfig, tools: dict[str, ToolDef]) -> dict[str, set[str]] | None:
+    """Usuário -> tools que o perfil dele libera (None = sem perfis, todo usuário que entra usa tudo)."""
+    cfg = tenant.oauth
+    if cfg is None or not cfg.usuarios:
+        return None
+    por_perfil: dict[str, set[str]] = {}
+    for perfil, itens in cfg.perfis.items():
+        liberadas: set[str] = set()
+        for item in itens:
+            if item == "*":
+                liberadas |= set(tools)
+            elif item in tenant.packs:
+                liberadas |= {t.nome for t in tools.values() if t.pack == item}
+            elif item in tools:
+                liberadas.add(item)
+            else:
+                raise ValueError(f"[oauth.perfis] {perfil}: '{item}' não é pack ativo nem tool.")
+        por_perfil[perfil] = liberadas
+    return {u: por_perfil[p] for u, p in cfg.usuarios.items()}
+
+
+def _envolver(td: ToolDef, ctx: Contexto, auditoria: Auditoria, sql_livre_para: set[str] | None = None,
+              liberadas: dict[str, set[str]] | None = None):
     """Esconde o parâmetro ctx do agente e adiciona auditoria + tratamento de erro.
 
     sql_livre_para: com login OAuth, só esses usuários podem usar sql_consulta (None = sem restrição).
+    liberadas: com perfis, usuário -> tools que ele pode usar (None = sem restrição).
     """
     sig = inspect.signature(td.fn)
     params_publicos = list(sig.parameters.values())[1:]  # remove ctx
@@ -46,8 +69,12 @@ def _envolver(td: ToolDef, ctx: Contexto, auditoria: Auditoria, sql_livre_para: 
         t0 = time.perf_counter()
         usuario = _usuario_atual()
         try:
+            nome_usuario = (usuario or "").split(":", 1)[-1]
+            if liberadas is not None and td.nome not in liberadas.get(nome_usuario, set()):
+                raise PoliticaViolada("Esta consulta não está liberada para o seu perfil. "
+                                      "Se precisar dela, fale com o TI.")
             if td.nome == "sql_consulta" and sql_livre_para is not None:
-                if (usuario or "").split(":", 1)[-1] not in sql_livre_para:
+                if nome_usuario not in sql_livre_para:
                     raise PoliticaViolada("Consulta SQL livre não está liberada para o seu usuário. "
                                           "Use as tools de domínio.")
             res = td.fn(ctx, **kwargs)
@@ -75,8 +102,9 @@ def criar_servidor(tenant: TenantConfig, sql: LeitorSql | None = None,
     ctx = montar_contexto(tenant, sql)
     auditoria = Auditoria(tenant.auditoria_arquivo, tenant.id)
 
+    tools = carregar_tools(tenant)
     auth: dict[str, Any] = {}
-    sql_livre_para = None
+    sql_livre_para = liberadas = None
     if provedor is not None:
         auth = {"auth_server_provider": provedor, "auth": AuthSettings(
             issuer_url=provedor.url, resource_server_url=provedor.recurso, validate_token_resource=True,
@@ -84,13 +112,14 @@ def criar_servidor(tenant: TenantConfig, sql: LeitorSql | None = None,
                 enabled=True, valid_scopes=[ESCOPO], default_scopes=[ESCOPO]),
             revocation_options=RevocationOptions(enabled=True))}
         sql_livre_para = {u.upper() for u in tenant.oauth.usuarios_sql_livre}
+        liberadas = _liberados_por_usuario(tenant, tools)
 
     srv = MCPServer(name=f"tacio-{tenant.id}", instructions=INSTRUCOES.format(nome=tenant.nome), **auth)
     if provedor is not None:
         registrar_rotas(srv, provedor)
-    for td in carregar_tools(tenant).values():
+    for td in tools.values():
         srv.add_tool(
-            _envolver(td, ctx, auditoria, sql_livre_para),
+            _envolver(td, ctx, auditoria, sql_livre_para, liberadas),
             name=td.nome,
             description=td.descricao,
             annotations=ToolAnnotations(readOnlyHint=td.somente_leitura,

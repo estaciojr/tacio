@@ -67,8 +67,20 @@ class OAuthConfig:
     banco: str = "dados/oauth.db"     # clientes, códigos e tokens (só hashes)
     usuarios_permitidos: list[str] = field(default_factory=list)  # vazio = qualquer usuário do Sankhya
     usuarios_sql_livre: list[str] = field(default_factory=list)   # quem pode usar sql_consulta
+    # Perfis: nome -> packs ou tools liberados ("*" = tudo). Com `usuarios` preenchido, só quem
+    # está nele entra, e cada um usa só as tools do seu perfil (substitui usuarios_permitidos).
+    perfis: dict[str, list[str]] = field(default_factory=dict)
+    usuarios: dict[str, str] = field(default_factory=dict)        # NOMUSU -> perfil
     ttl_acesso_s: int = 3600
     ttl_refresh_dias: int = 30
+
+    def __post_init__(self) -> None:
+        if self.usuarios and self.usuarios_permitidos:
+            raise ValueError("[oauth] use `usuarios` (com perfil) ou `usuarios_permitidos`, não os dois.")
+        self.usuarios = {u.upper(): p for u, p in self.usuarios.items()}
+        sem_perfil = sorted({p for p in self.usuarios.values() if p not in self.perfis})
+        if sem_perfil:
+            raise ValueError(f"[oauth] perfil não definido em [oauth.perfis]: {', '.join(sem_perfil)}.")
 
 
 @dataclass

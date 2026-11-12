@@ -57,6 +57,7 @@ class ToolDef:
     descricao: str
     fn: Callable[..., Any]
     somente_leitura: bool = True
+    pack: str = ""
 
 
 @dataclass
@@ -67,7 +68,7 @@ class Pack:
 
     def tool(self, descricao: str, nome: str | None = None, somente_leitura: bool = True):
         def deco(fn: Callable[..., Any]):
-            self.tools.append(ToolDef(nome or fn.__name__, descricao.strip(), fn, somente_leitura))
+            self.tools.append(ToolDef(nome or fn.__name__, descricao.strip(), fn, somente_leitura, self.nome))
             return fn
         return deco
 

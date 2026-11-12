@@ -87,3 +87,12 @@ frete = "dalla.frete.toml"
 # usuarios_sql_livre = []         # quem pode usar sql_consulta
 # ttl_acesso_s = 3600
 # ttl_refresh_dias = 30
+# Perfis (opcional; vem depois das chaves de [oauth]): com [oauth.usuarios] preenchido, só quem
+# está lá entra e cada um usa só o seu perfil — então não preencha usuarios_permitidos.
+# Itens do perfil: nome de pack, nome de tool ou "*" (tudo).
+# [oauth.perfis]
+# completo = ["*"]
+# compras = ["compras", "estoque", "vendas"]
+# [oauth.usuarios]                # NOMUSU com ponto vai entre aspas
+# "CLAUDE.TI" = "completo"
+# "FULANO.COMPRAS" = "compras"

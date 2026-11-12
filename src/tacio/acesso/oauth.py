@@ -59,7 +59,7 @@ class ProvedorTacio:
         self.url = cfg.url_publica.rstrip("/")
         self.recurso = f"{self.url}/mcp"
         self.cnpjs = {so_digitos(c) for c in cfg.cnpjs}
-        self.permitidos = {u.upper() for u in cfg.usuarios_permitidos}
+        self.permitidos = {u.upper() for u in (cfg.usuarios or cfg.usuarios_permitidos)}
         self._falhas: dict[str, deque] = defaultdict(deque)
 
     # ---- clientes (registro dinâmico: o Claude/ChatGPT se registra sozinho)

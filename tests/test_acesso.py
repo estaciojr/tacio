@@ -59,15 +59,14 @@ def _req(url, dados=None, headers=None, metodo=None):
         return e.code, e.headers, e.read().decode()
 
 
-@pytest.fixture
-def servidor(tmp_path):
+def _subir(tmp_path, **oauth):
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         porta = s.getsockname()[1]
     url = f"http://127.0.0.1:{porta}"
     tenant = _tenant(tmp_path)
     tenant.oauth = OAuthConfig(url_publica=url, sankhya_url="http://sankhya.invalido", cnpjs=[CNPJ],
-                               usuarios_permitidos=["ANA", "CLAUDE.TI"], usuarios_sql_livre=["CLAUDE.TI"])
+                               usuarios_sql_livre=["CLAUDE.TI"], **oauth)
     tenant.politica.sql_livre = True
     tenant.politica.tabelas_sql_livre = ["TGFPRO"]
     sankhya = SankhyaFalso()
@@ -80,7 +79,22 @@ def servidor(tmp_path):
         if srv.started:
             break
         time.sleep(0.05)
-    yield {"url": url, "sankhya": sankhya, "tmp": tmp_path, "provedor": provedor}
+    return {"url": url, "sankhya": sankhya, "tmp": tmp_path, "provedor": provedor}, srv, t
+
+
+@pytest.fixture
+def servidor(tmp_path):
+    dados, srv, t = _subir(tmp_path, usuarios_permitidos=["ANA", "CLAUDE.TI"])
+    yield dados
+    srv.should_exit = True
+    t.join(timeout=5)
+
+
+@pytest.fixture
+def servidor_perfis(tmp_path):
+    dados, srv, t = _subir(tmp_path, perfis={"completo": ["*"], "estoque": ["ultimas_compras_produto"]},
+                           usuarios={"claude.ti": "completo", "ANA": "estoque"})
+    yield dados
     srv.should_exit = True
     t.join(timeout=5)
 
@@ -285,3 +299,46 @@ def test_tela_escapa_html_do_nome_do_app(servidor):
     st, h, pagina = _req(f"{url}/login?pedido={pedido}")
     assert st == 200 and "<script>x" not in pagina and "&lt;script&gt;" in pagina
     assert "claude.ai" in pagina and h["X-Frame-Options"] == "DENY"
+
+
+def _chamar(url, usuario, nome, argumentos):
+    _, tok, _, _ = _token_completo(url, usuario)
+    sessao = _sessao(url, tok["access_token"])
+    _, _, r = _mcp(url, tok["access_token"], "tools/call", {"name": nome, "arguments": argumentos},
+                   sessao, ident=3)
+    return json.dumps(r, ensure_ascii=False)
+
+
+def test_perfil_libera_so_as_tools_dele(servidor_perfis):
+    url = servidor_perfis["url"]
+    bloqueio = "não está liberada para o seu perfil"
+    assert bloqueio in _chamar(url, "ANA", "descrever_tabela", {"tabela": "TGFPRO"})
+    assert bloqueio not in _chamar(url, "ANA", "ultimas_compras_produto", {"codprod": 1})
+    assert bloqueio not in _chamar(url, "CLAUDE.TI", "descrever_tabela", {"tabela": "TGFPRO"})
+    linhas = (servidor_perfis["tmp"] / "audit.jsonl").read_text(encoding="utf-8").splitlines()
+    assert any(bloqueio in l and "ANA" in l for l in linhas)
+
+
+def test_com_perfis_quem_nao_tem_perfil_nao_entra(servidor_perfis):
+    url = servidor_perfis["url"]
+    pedido, _, _ = _iniciar(url, _registrar(url))
+    st, _, corpo = _login(url, pedido, usuario="BRUNO")
+    assert st == 400 and "não foi liberado" in corpo
+
+
+def test_perfil_com_item_desconhecido_nao_sobe(tmp_path):
+    tenant = _tenant(tmp_path)
+    tenant.oauth = OAuthConfig(url_publica="http://127.0.0.1:1", sankhya_url="x",
+                               perfis={"compras": ["financeiro"]}, usuarios={"ANA": "compras"})
+    provedor = ProvedorTacio(tenant.oauth, tenant.id, SankhyaFalso(), Armazem(tmp_path / "o.db"))
+    with pytest.raises(ValueError, match="financeiro"):
+        app_oauth(tenant, provedor, sql=LeitorFalso())
+
+
+@pytest.mark.parametrize("kw, erro", [
+    ({"perfis": {}, "usuarios": {"ANA": "compras"}}, "perfil não definido"),
+    ({"perfis": {"c": ["*"]}, "usuarios": {"ANA": "c"}, "usuarios_permitidos": ["ANA"]}, "não os dois"),
+])
+def test_config_de_perfis_invalida(kw, erro):
+    with pytest.raises(ValueError, match=erro):
+        OAuthConfig(url_publica="http://127.0.0.1:1", sankhya_url="x", **kw)
