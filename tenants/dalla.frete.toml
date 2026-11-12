@@ -1,0 +1,30 @@
+# O que conta como frete nas tools do pack frete (levantado em 12/11/2026).
+[frete]
+# Frete cobrado do cliente (TGFCAB.VLRFRETE). Remessa = data da entrega (padrão); venda = data da venda.
+# As duas carregam o mesmo frete: nunca somar.
+tops_remessa = [1154]
+tops_venda = [1117]
+# Vendas sem remessa (e-commerce, sellers): entram nas duas bases.
+tops_venda_direta = [1108, 1109]
+# Devoluções e estornos de venda: o frete delas é descontado.
+tops_devolucao = [1203, 1205, 1207, 1208, 1222, 1239]
+
+# Transportadora do grupo: fatura para a loja o frete das remessas (CT-e e NFS-e).
+empresa_transportadora = 7
+tops_transportadora = [1119, 1120, 1125]
+
+# Frete pago (CT-e recebido, título na TGFFIN sem nota).
+tops_cte = [1606, 1616, 1617, 1618, 1620]
+tops_cte_ecommerce = [1611]
+# Parceiros do grupo: o CT-e deles é frete interno, fica fora do frete pago.
+parceiros_internos = [7]
+
+# Custo por placa: naturezas de combustível (o resto com veículo é manutenção e outros).
+naturezas_combustivel = [2011006, 2010906]
+# Custo da frota que não tem veículo no lançamento: aparece à parte, sem ratear.
+# Pedágio (despesa e custo), rastreamento, seguro de veículos, multas de trânsito, IPVA/licenciamento.
+naturezas_frota_sem_placa = [2010809, 3010106, 2011005, 2011007, 2030702, 2030707]
+
+# Frota: TGFVEI.TIPO (C caminhão, R reboque). Fora: cadastros fictícios.
+tipos_veiculo = ["C", "R"]
+veiculos_excluidos = [71]
