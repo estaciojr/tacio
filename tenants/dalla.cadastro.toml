@@ -1,0 +1,4 @@
+# Pack cadastro: campos de contato da Dalla além dos padrão (TELEFONE, FAX, EMAIL, EMAILNFE).
+# Saem só para pessoa jurídica, como os demais.
+[cadastro]
+campos_contato = ["AD_WHATSAPP"]

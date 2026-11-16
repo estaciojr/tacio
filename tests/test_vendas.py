@@ -1,4 +1,5 @@
 import tomllib
+from datetime import date
 from dataclasses import replace
 from pathlib import Path
 
@@ -173,3 +174,67 @@ def test_schema_do_cliente_troca_so_tabelas():
 def test_schema_invalido_e_recusado():
     with pytest.raises(ValueError, match="schema"):
         SqlConfig(dsn="x", schema="dbo; DROP TABLE X")
+
+
+# --- marca e ano anterior -------------------------------------------------------
+class LeitorComparacao(LeitorVendas):
+    """Devolve linhas com as chaves dos agrupamentos; o ano anterior vale metade."""
+
+    def consultar(self, sql, params=(), max_linhas=200):
+        validar_somente_leitura(sql)
+        self.chamadas.append((sql, list(params), max_linhas))
+        anterior = list(params)[0].year == 2025
+        f = 0.5 if anterior else 1
+        mes = "2025-10" if anterior else "2026-10"
+        linha = {"CODEMP": 3, "CODPROD": 10, "MARCA": "DECA", "MES": mes, "VLR_VENDA": 1000 * f,
+                 "VLR_DEVOLUCAO": 0, "VLR_LIQUIDO": 1000 * f, "NOTAS_VENDA": 4, "NOTAS_DEVOLUCAO": 0,
+                 "NOTAS": 4, "QTD_LIQUIDA": 8 * f}
+        return [linha], False
+
+
+def _ctx_comparacao(tmp_path):
+    ctx, tools, _ = _ctx(tmp_path)
+    leitor = LeitorComparacao()
+    ctx.sql = leitor
+    return ctx, tools, leitor
+
+
+def test_filtro_e_agrupamento_por_marca(tmp_path):
+    ctx, tools, leitor = _ctx(tmp_path)
+    res = tools["vendas_por_produto"].fn(ctx, **PERIODO, agrupar="marca", marca=" deca ")
+    sql, params, _ = leitor.chamadas[0]
+    assert "GROUP BY RTRIM(PRO.MARCA)" in sql and "PRO.MARCA LIKE ?" in sql
+    assert params[-1] == "%deca%" and res["marca"] == " deca "
+
+
+def test_ano_anterior_filtra_pelas_chaves_do_top(tmp_path):
+    ctx, tools, leitor = _ctx_comparacao(tmp_path)
+    res = tools["vendas_por_produto"].fn(ctx, **PERIODO, agrupar="produto", top=10,
+                                         comparar_ano_anterior=True)
+    sql_ant, params_ant, _ = leitor.chamadas[2]  # atual: detalhe e total; depois o ano anterior
+    assert "TOP" not in sql_ant.split("FROM")[0] and "ITE.CODPROD IN (?)" in sql_ant
+    assert params_ant[:2] == [date(2025, 10, 1), date(2025, 10, 31)] and params_ant[-1] == 10
+    l = res["linhas"][0]
+    assert l["VLR_LIQUIDO_ANO_ANTERIOR"] == 500.0 and l["QTD_LIQUIDA_ANO_ANTERIOR"] == 4.0
+    assert l["VAR_PCT"] == 100.0
+    ant = res["resumo"]["ano_anterior"]
+    assert ant["vlr_liquido"] == 500.0 and ant["var_pct_liquido"] == 100.0
+    assert ant["periodo"] == "2025-10-01 a 2025-10-31"
+
+
+def test_ano_anterior_em_serie_casa_pelo_mes(tmp_path):
+    ctx, tools, leitor = _ctx_comparacao(tmp_path)
+    res = tools["vendas_resumo"].fn(ctx, **PERIODO, agrupar="mes", comparar_ano_anterior=True)
+    assert leitor.chamadas[2][0].count(" IN (") == leitor.chamadas[0][0].count(" IN (")
+    assert res["linhas"][0]["VLR_VENDA_ANO_ANTERIOR"] == 500.0
+
+
+def test_ano_anterior_de_29_de_fevereiro(tmp_path):
+    from tacio.packs.vendas import _um_ano_antes
+    assert _um_ano_antes(date(2028, 2, 29)) == date(2027, 2, 28)
+
+
+def test_sem_comparacao_nao_roda_consulta_extra(tmp_path):
+    ctx, tools, leitor = _ctx(tmp_path)
+    res = tools["vendas_resumo"].fn(ctx, **PERIODO)
+    assert len(leitor.chamadas) == 2 and "ano_anterior" not in res["resumo"]

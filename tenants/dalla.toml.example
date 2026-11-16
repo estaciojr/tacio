@@ -2,7 +2,7 @@
 [tenant]
 id = "dalla"
 nome = "Dalla Home Center"
-packs = ["meta", "compras", "estoque", "vendas", "entregas", "financeiro", "frete"]
+packs = ["meta", "compras", "estoque", "vendas", "entregas", "financeiro", "frete", "cadastro"]
 # Empresas (CODEMP) que este servidor pode consultar. Vazio = todas.
 codemp_permitidas = []
 
@@ -75,6 +75,7 @@ vendas = "dalla.vendas.toml"
 entregas = "dalla.entregas.toml"
 financeiro = "dalla.financeiro.toml"
 frete = "dalla.frete.toml"
+cadastro = "dalla.cadastro.toml"
 
 # Login OAuth no transporte HTTP (opcional). Sem esta seção, `--transport http` usa o token fixo [http].
 # Cada pessoa entra com a senha dela do Sankhya (conferida no MobileLoginSP); o Tacio não guarda senha.

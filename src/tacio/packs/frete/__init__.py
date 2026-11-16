@@ -16,6 +16,7 @@ Conceito (parâmetros em ctx.regra("frete"), ex.: tenants/dalla.frete.toml):
 Depende de campos e tabelas personalizados (AD_NUNOTACTE, AD_ORDPAGMOT*, AD_CHLVEI).
 """
 from dataclasses import dataclass
+from datetime import date, timedelta
 
 from ...pack import Contexto, Pack, filtro_in
 from ...policy import PoliticaViolada, validar_periodo
@@ -69,6 +70,16 @@ def _lista(valores: list[int]) -> str:
 
 def _num(v) -> float:
     return round(float(v or 0), 2)
+
+
+def _meses(ini: date, fim: date) -> list[tuple[str, date, date]]:
+    """Fatia o período em meses de calendário: [('AAAA-MM', início, fim), ...]."""
+    fatias, d = [], ini
+    while d <= fim:
+        prox = date(d.year + (d.month == 12), d.month % 12 + 1, 1)
+        fatias.append((f"{d:%Y-%m}", d, min(fim, prox - timedelta(days=1))))
+        d = prox
+    return fatias
 
 
 def _validar_agrupar(agrupar: str, validos) -> None:
@@ -334,10 +345,14 @@ Custo de cada veículo da frota comparado com o frete que ele gerou. Use para 'c
 - incluir_todos=true traz também carros, empilhadeiras e outros veículos fora da frota de entrega.
 - 'sem_placa': custo da frota sem veículo no lançamento (IPVA, seguro, pedágio, multa,
   rastreamento). Salário de motorista próprio não está separado e fica de fora.
+- agrupar: veiculo (padrão, período inteiro) | mes (uma linha por veículo e mês, KM de cada mês,
+  e resumo.por_mes com o total da frota). Para evolução mês a mês, use mes numa chamada só em vez
+  de chamar um mês por vez.
 Datas em AAAA-MM-DD, período máximo de 366 dias.
 """)
 def custo_por_placa(ctx: Contexto, data_inicio: str, data_fim: str, codveiculo: int | None = None,
-                    incluir_todos: bool = False, top: int = 100) -> dict:
+                    incluir_todos: bool = False, top: int = 100, agrupar: str = "veiculo") -> dict:
+    _validar_agrupar(agrupar, ("veiculo", "mes"))
     r = _regra(ctx)
     ini, fim = validar_periodo(data_inicio, data_fim)
     if ctx.tenant.codemp_permitidas:
@@ -408,21 +423,33 @@ def custo_por_placa(ctx: Contexto, data_inicio: str, data_fim: str, codveiculo: 
       AND (REC.CODVEICULO IS NOT NULL OR CST.CODVEICULO IS NOT NULL OR AGR.PLACA IS NOT NULL)
     ORDER BY VLR_CUSTO DESC"""
     top = max(1, min(top, ctx.max_linhas))
-    params = [ini, fim] * 5 + p_vei
-    linhas, trunc = ctx.sql.consultar(sql, params, top)
-    for l in linhas:
-        for col in l:
-            if col.startswith(("VLR_", "KM")) and l[col] is not None:
-                l[col] = _num(l[col])
-        l["PERC_CUSTO_SOBRE_FRETE"] = _num(100 * l["VLR_CUSTO"] / l["VLR_FRETE"]) if l["VLR_FRETE"] else None
-        l["CUSTO_POR_KM"] = _num(l["VLR_CUSTO"] / l["KM_RODADO"]) if l.get("KM_RODADO") else None
+    # Por mês roda a mesma consulta mês a mês: KM e custo de cada mês saem com a mesma regra.
+    fatias = _meses(ini, fim) if agrupar == "mes" else [(None, ini, fim)]
+    linhas, trunc, por_mes = [], False, []
+    for mes, f_ini, f_fim in fatias:
+        parte, t = ctx.sql.consultar(sql, [f_ini, f_fim] * 5 + p_vei, top)
+        trunc = trunc or t
+        for l in parte:
+            for col in l:
+                if col.startswith(("VLR_", "KM")) and l[col] is not None:
+                    l[col] = _num(l[col])
+            l["PERC_CUSTO_SOBRE_FRETE"] = _num(100 * l["VLR_CUSTO"] / l["VLR_FRETE"]) if l["VLR_FRETE"] else None
+            l["CUSTO_POR_KM"] = _num(l["VLR_CUSTO"] / l["KM_RODADO"]) if l.get("KM_RODADO") else None
+        if mes is not None:
+            parte = [{"MES": mes, **{k: v for k, v in l.items() if k != "MES"}} for l in parte]
+            por_mes.append({"mes": mes, "veiculos": len(parte),
+                            "vlr_frete": _num(sum(l["VLR_FRETE"] for l in parte)),
+                            "vlr_custo": _num(sum(l["VLR_CUSTO"] for l in parte))})
+        linhas += parte
+    if len(linhas) > ctx.max_linhas:
+        linhas, trunc = linhas[:ctx.max_linhas], True
     sem_placa = ctx.sql.consultar(f"""
         SELECT F.CODNAT, NAT.DESCRNAT AS NATUREZA, COUNT(*) AS TITULOS, SUM(F.VLRDESDOB) AS VLR
         FROM sankhya.TGFFIN F LEFT JOIN sankhya.TGFNAT NAT ON NAT.CODNAT = F.CODNAT
         WHERE F.RECDESP = -1 AND F.PROVISAO = 'N' AND F.CODNAT IN ({_lista(r.sem_placa)})
           AND F.DTNEG >= ? AND F.DTNEG < DATEADD(DAY, 1, ?)
         GROUP BY F.CODNAT, NAT.DESCRNAT ORDER BY VLR DESC""", [ini, fim], 50)[0] if codveiculo is None else []
-    resumo = {"veiculos": len(linhas),
+    resumo = {"veiculos": len({l.get("CODVEICULO") for l in linhas}),
               "vlr_frete": _num(sum(l["VLR_FRETE"] for l in linhas)),
               "vlr_combustivel": _num(sum(l["VLR_COMBUSTIVEL"] for l in linhas)),
               "vlr_manutencao": _num(sum(l["VLR_MANUTENCAO"] for l in linhas)),
@@ -431,8 +458,10 @@ def custo_por_placa(ctx: Contexto, data_inicio: str, data_fim: str, codveiculo: 
               "sem_placa": {"vlr": _num(sum(s["VLR"] or 0 for s in sem_placa)),
                             "por_natureza": [{"codnat": s["CODNAT"], "natureza": (s["NATUREZA"] or "").strip(),
                                               "titulos": int(s["TITULOS"]), "vlr": _num(s["VLR"])} for s in sem_placa]}}
+    if por_mes:
+        resumo["por_mes"] = por_mes
     return ctx.politica.resultado(linhas, trunc, periodo=f"{ini} a {fim}", incluir_todos=incluir_todos,
-                                  resumo=resumo)
+                                  agrupar=agrupar, resumo=resumo)
 
 
 # ---------------------------------------------------------------- frota

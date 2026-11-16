@@ -8,8 +8,11 @@ Conceito (o mesmo do pack estoque):
   O valor por item não inclui frete nem impostos da nota, então não fecha com VLRNOTA.
 - Segmentos: recortes do ctx.regra("vendas") (ex.: tenants/dalla.vendas.toml) que ficam fora da
   conta padrão e só entram quando pedidos. Podem ter TOPs fora do universo (GOLSINAL 0), que somam.
+- Ano anterior: o mesmo período um ano antes, com as mesmas regras. Em ranking, compara só as
+  linhas que entraram no top do período atual.
 """
 from dataclasses import dataclass
+from datetime import date, timedelta
 
 from ...pack import Contexto, Pack, filtro_in
 from ...policy import PoliticaViolada, validar_periodo
@@ -77,9 +80,20 @@ _AGRUPAMENTOS_ITEM = {
         SELECT {top} ITE.CODVEND, VEN.APELIDO AS VENDEDOR, {medidas}
         {de} LEFT JOIN sankhya.TGFVEN VEN ON VEN.CODVEND = ITE.CODVEND {where}
         GROUP BY ITE.CODVEND, VEN.APELIDO ORDER BY VLR_LIQUIDO DESC""",
+    "marca": """
+        SELECT {top} RTRIM(PRO.MARCA) AS MARCA, {medidas} {de} {where}
+        GROUP BY RTRIM(PRO.MARCA) ORDER BY VLR_LIQUIDO DESC""",
     "empresa": _POR_EMPRESA,
     "mes": _POR_MES,
 }
+
+# Coluna que identifica a linha em cada agrupamento: casa o ano anterior com o atual.
+# Série no tempo (mes/dia) casa pela data deslocada um ano, sem filtro.
+_CHAVE_NOTA = {"empresa": ("CODEMP", "CAB.CODEMP"), "operacao": ("CODTIPOPER", "CAB.CODTIPOPER"),
+               "vendedor": ("CODVEND", "CAB.CODVEND"), "mes": ("MES", None), "dia": ("DIA", None)}
+_CHAVE_ITEM = {"produto": ("CODPROD", "ITE.CODPROD"), "grupo": ("CODGRUPOPROD", "PRO.CODGRUPOPROD"),
+               "vendedor": ("CODVEND", "ITE.CODVEND"), "marca": ("MARCA", "RTRIM(PRO.MARCA)"),
+               "empresa": ("CODEMP", "CAB.CODEMP"), "mes": ("MES", None)}
 
 
 def _num(v) -> float:
@@ -144,16 +158,71 @@ def _universo(ctx: Contexto, data_inicio: str, data_fim: str, codemp: int | None
 
 
 def _detalhe(ctx: Contexto, modelo: str, medidas: str, de: str, where: str, params: list,
-             top: int) -> tuple[list[dict], bool]:
-    top = max(1, min(top, ctx.max_linhas))
-    ranking = "{top}" in modelo
-    sql = modelo.format(top=f"TOP {top}", medidas=medidas, de=de, where=where)
+             top: int | None) -> tuple[list[dict], bool]:
+    """top=None tira o corte do ranking (ano anterior, já filtrado pelas chaves do atual)."""
+    ranking = "{top}" in modelo and top is not None
+    top = max(1, min(top or ctx.max_linhas, ctx.max_linhas))
+    sql = modelo.format(top=f"TOP {top}" if ranking else "", medidas=medidas, de=de, where=where)
     linhas, trunc = ctx.sql.consultar(sql, params, top if ranking else ctx.max_linhas)
     for l in linhas:
         for col in l:
             if col.startswith("VLR_"):
                 l[col] = _num(l[col])
     return linhas, trunc
+
+
+def _um_ano_antes(d: date) -> date:
+    try:
+        return d.replace(year=d.year - 1)
+    except ValueError:  # 29/02
+        return d.replace(year=d.year - 1, day=28)
+
+
+def _um_ano_depois(chave):
+    """Leva a chave de série do ano anterior para o atual (MES 'AAAA-MM' ou DIA date)."""
+    if isinstance(chave, str):
+        return f"{int(chave[:4]) + 1}{chave[4:]}"
+    if isinstance(chave, date):
+        try:
+            return chave.replace(year=chave.year + 1)
+        except ValueError:
+            return chave + timedelta(days=365)
+    return chave
+
+
+def _variacao(atual: float, anterior: float) -> float | None:
+    return _num((atual - anterior) / abs(anterior) * 100) if anterior else None
+
+
+def _comparar_ano_anterior(ctx: Contexto, linhas: list[dict], chave: tuple[str, str | None],
+                           modelo: str, medidas: str, de: str, where: str, params: list,
+                           ini_ant: date, fim_ant: date, comparadas: list[str]) -> None:
+    """Acrescenta <MEDIDA>_ANO_ANTERIOR e VAR_PCT (do VLR_LIQUIDO) a cada linha."""
+    col, expr = chave
+    params_ant = [ini_ant, fim_ant, *params[2:]]
+    where_ant = where
+    if expr is not None:
+        chaves = [l[col] for l in linhas if l[col] is not None]
+        if not chaves:
+            return
+        where_ant += f" AND {expr} IN ({','.join('?' * len(chaves))})"
+        params_ant += chaves
+    anteriores, _ = _detalhe(ctx, modelo, medidas, de, where_ant, params_ant, None)
+    por_chave = {(l[col] if expr is not None else _um_ano_depois(l[col])): l for l in anteriores}
+    for l in linhas:
+        ant = por_chave.get(l[col], {})
+        for m in comparadas:
+            l[f"{m}_ANO_ANTERIOR"] = _num(ant.get(m))
+        l["VAR_PCT"] = _variacao(float(l["VLR_LIQUIDO"] or 0), float(ant.get("VLR_LIQUIDO") or 0))
+
+
+def _resumo_ano_anterior(ctx: Contexto, medidas: str, de: str, where: str, params: list,
+                         ini_ant: date, fim_ant: date, resumo: dict, montar) -> dict:
+    total = ctx.sql.consultar(f"SELECT {medidas} {de} {where}", [ini_ant, fim_ant, *params[2:]], 1)[0][0]
+    ant = montar(total)
+    ant["periodo"] = f"{ini_ant} a {fim_ant}"
+    ant["var_pct_liquido"] = _variacao(resumo["vlr_liquido"], ant["vlr_liquido"])
+    return ant
 
 
 def _validar_agrupar(agrupar: str, validos: dict) -> str:
@@ -168,21 +237,34 @@ Venda líquida (venda menos devolução) num período, pelo valor da nota. Use p
 - agrupar: empresa (padrão) | mes | dia | operacao | vendedor.
 - 'resumo' traz o total do período, mesmo quando as linhas são só o top.
 - segmento: só quando a pergunta for sobre um dos recortes de segmentos_venda; traz somente ele.
+- comparar_ano_anterior=true: o mesmo período um ano antes em cada linha (VLR_*_ANO_ANTERIOR e
+  VAR_PCT do líquido) e no resumo (resumo.ano_anterior). Use em vez de chamar duas vezes ou loja a
+  loja. Em ranking, compara só as linhas do top atual; por dia, compara a mesma data (não o mesmo
+  dia da semana).
 Considera a data de negociação (DTNEG) e notas confirmadas.
-Datas em AAAA-MM-DD, período máximo de 366 dias. Para produto ou grupo, use vendas_por_produto.
+Datas em AAAA-MM-DD, período máximo de 366 dias. Para produto, grupo ou marca, use vendas_por_produto.
 """)
 def vendas_resumo(ctx: Contexto, data_inicio: str, data_fim: str, codemp: int | None = None,
-                  agrupar: str = "empresa", top: int = 50, segmento: str | None = None) -> dict:
+                  agrupar: str = "empresa", top: int = 50, segmento: str | None = None,
+                  comparar_ano_anterior: bool = False) -> dict:
     modelo = _validar_agrupar(agrupar, _AGRUPAMENTOS_NOTA)
     where, params, periodo, segmento = _universo(ctx, data_inicio, data_fim, codemp, segmento)
     linhas, trunc = _detalhe(ctx, modelo, _MEDIDAS_NOTA, _DE_NOTA, where, params, top)
     for l in linhas:
         l["TICKET_MEDIO"] = _num(l["VLR_VENDA"] / l["NOTAS_VENDA"]) if l["NOTAS_VENDA"] else 0.0
 
-    total = ctx.sql.consultar(f"SELECT {_MEDIDAS_NOTA} {_DE_NOTA} {where}", params, 1)[0][0]
-    resumo = {"vlr_venda": _num(total["VLR_VENDA"]), "vlr_devolucao": _num(total["VLR_DEVOLUCAO"]),
-              "vlr_liquido": _num(total["VLR_LIQUIDO"]), "notas_venda": int(total["NOTAS_VENDA"] or 0),
-              "notas_devolucao": int(total["NOTAS_DEVOLUCAO"] or 0)}
+    def montar(total: dict) -> dict:
+        return {"vlr_venda": _num(total["VLR_VENDA"]), "vlr_devolucao": _num(total["VLR_DEVOLUCAO"]),
+                "vlr_liquido": _num(total["VLR_LIQUIDO"]), "notas_venda": int(total["NOTAS_VENDA"] or 0),
+                "notas_devolucao": int(total["NOTAS_DEVOLUCAO"] or 0)}
+
+    resumo = montar(ctx.sql.consultar(f"SELECT {_MEDIDAS_NOTA} {_DE_NOTA} {where}", params, 1)[0][0])
+    if comparar_ano_anterior:
+        ini_ant, fim_ant = _um_ano_antes(params[0]), _um_ano_antes(params[1])
+        _comparar_ano_anterior(ctx, linhas, _CHAVE_NOTA[agrupar], modelo, _MEDIDAS_NOTA, _DE_NOTA, where,
+                               params, ini_ant, fim_ant, ["VLR_VENDA", "VLR_LIQUIDO"])
+        resumo["ano_anterior"] = _resumo_ano_anterior(ctx, _MEDIDAS_NOTA, _DE_NOTA, where, params,
+                                                      ini_ant, fim_ant, resumo, montar)
     return ctx.politica.resultado(linhas, trunc, periodo=periodo, agrupar=agrupar, segmento=segmento,
                                   resumo=resumo)
 
@@ -190,16 +272,21 @@ def vendas_resumo(ctx: Contexto, data_inicio: str, data_fim: str, codemp: int | 
 @pack.tool(descricao="""
 Venda líquida por item, descontadas as devoluções: quantidade e valor (VLRTOT - VLRDESC, sem frete
 nem impostos da nota). Use para 'mais vendidos', 'quanto vendeu tal produto' ou 'venda por grupo'.
-- agrupar: produto (padrão) | grupo | vendedor | empresa | mes.
-- Filtros: codprod, codgrupo (código exato do grupo), codvend (vendedor do item), codemp.
+- agrupar: produto (padrão) | grupo | marca | vendedor | empresa | mes.
+- Filtros: codprod, codgrupo (código exato do grupo), marca (trecho do nome da marca, ex.: 'DECA';
+  agrupe por marca para ver quais marcas o filtro pegou), codvend (vendedor do item), codemp.
 - segmento: só quando a pergunta for sobre um dos recortes de segmentos_venda; traz somente ele.
+- comparar_ano_anterior=true: o mesmo período um ano antes em cada linha (QTD/VLR_*_ANO_ANTERIOR e
+  VAR_PCT do líquido) e no resumo (resumo.ano_anterior). Use em vez de chamar duas vezes. Em
+  ranking, compara só as linhas do top atual.
 Como não inclui frete nem impostos, o total difere de vendas_resumo.
 Datas em AAAA-MM-DD (data de negociação), período máximo de 366 dias.
 """)
 def vendas_por_produto(ctx: Contexto, data_inicio: str, data_fim: str, codemp: int | None = None,
                        agrupar: str = "produto", codprod: int | None = None,
                        codgrupo: int | None = None, codvend: int | None = None,
-                       top: int = 50, segmento: str | None = None) -> dict:
+                       marca: str | None = None, top: int = 50, segmento: str | None = None,
+                       comparar_ano_anterior: bool = False) -> dict:
     modelo = _validar_agrupar(agrupar, _AGRUPAMENTOS_ITEM)
     where, params, periodo, segmento = _universo(ctx, data_inicio, data_fim, codemp, segmento)
     for coluna, valor in (("ITE.CODPROD", codprod), ("PRO.CODGRUPOPROD", codgrupo),
@@ -207,13 +294,25 @@ def vendas_por_produto(ctx: Contexto, data_inicio: str, data_fim: str, codemp: i
         if valor is not None:
             where += f" AND {coluna} = ?"
             params.append(int(valor))
+    if marca and marca.strip():
+        where += " AND PRO.MARCA LIKE ?"
+        params.append(f"%{marca.strip()}%")
     linhas, trunc = _detalhe(ctx, modelo, _MEDIDAS_ITEM, _DE_ITEM, where, params, top)
-    total = ctx.sql.consultar(f"SELECT {_MEDIDAS_ITEM} {_DE_ITEM} {where}", params, 1)[0][0]
-    resumo = {"qtd_liquida": _num(total["QTD_LIQUIDA"]), "vlr_venda": _num(total["VLR_VENDA"]),
-              "vlr_devolucao": _num(total["VLR_DEVOLUCAO"]), "vlr_liquido": _num(total["VLR_LIQUIDO"]),
-              "notas": int(total["NOTAS"] or 0)}
+
+    def montar(total: dict) -> dict:
+        return {"qtd_liquida": _num(total["QTD_LIQUIDA"]), "vlr_venda": _num(total["VLR_VENDA"]),
+                "vlr_devolucao": _num(total["VLR_DEVOLUCAO"]), "vlr_liquido": _num(total["VLR_LIQUIDO"]),
+                "notas": int(total["NOTAS"] or 0)}
+
+    resumo = montar(ctx.sql.consultar(f"SELECT {_MEDIDAS_ITEM} {_DE_ITEM} {where}", params, 1)[0][0])
+    if comparar_ano_anterior:
+        ini_ant, fim_ant = _um_ano_antes(params[0]), _um_ano_antes(params[1])
+        _comparar_ano_anterior(ctx, linhas, _CHAVE_ITEM[agrupar], modelo, _MEDIDAS_ITEM, _DE_ITEM, where,
+                               params, ini_ant, fim_ant, ["QTD_LIQUIDA", "VLR_LIQUIDO"])
+        resumo["ano_anterior"] = _resumo_ano_anterior(ctx, _MEDIDAS_ITEM, _DE_ITEM, where, params,
+                                                      ini_ant, fim_ant, resumo, montar)
     return ctx.politica.resultado(linhas, trunc, periodo=periodo, agrupar=agrupar, segmento=segmento,
-                                  resumo=resumo)
+                                  marca=marca, resumo=resumo)
 
 
 @pack.tool(descricao="""

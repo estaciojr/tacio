@@ -100,9 +100,14 @@ poucos dias) e em ALERTA. Volumosos (pisos, porcelanatos, revestimentos) com est
 não contam como ruptura. Ordenado por status e pelo valor vendido no período (impacto).
 Traz o índice de ruptura da rede/loja (por itens e por venda). Use para 'o que está
 faltando nas lojas', 'índice de ruptura' ou 'o que vai faltar'.
+- agrupar: item (padrão, lista de produtos) | loja (uma linha por loja com posições, rupturas,
+  iminentes, alertas e os dois índices). Para comparar lojas, use loja numa chamada só em vez de
+  chamar loja a loja.
 """)
 def ruptura_por_loja(ctx: Contexto, codemp: int | None = None, incluir_risco: bool = False,
-                     top: int = 100, dias: int | None = None) -> dict:
+                     top: int = 100, dias: int | None = None, agrupar: str = "item") -> dict:
+    if agrupar not in ("item", "loja"):
+        raise PoliticaViolada("agrupar inválido. Válidos: item, loja.")
     regra = RegraRuptura.de(ctx.regra("ruptura"))
     dias = regra.dias_giro if dias is None else int(dias)
     if not 7 <= dias <= 365:
@@ -169,6 +174,7 @@ def ruptura_por_loja(ctx: Contexto, codemp: int | None = None, incluir_risco: bo
     contagem = dict.fromkeys(_ORDEM_STATUS, 0)
     vlr_total = vlr_ruptura = 0.0
     saida: list[dict] = []
+    por_loja: dict[int, dict] = {}
     for l in universo:
         disp, disp_cd = float(l["DISPONIVEL"] or 0), float(l["DISPONIVEL_CD"] or 0)
         vd_dia = float(l["QTD_VENDIDA_PERIODO"] or 0) / dias
@@ -179,6 +185,11 @@ def ruptura_por_loja(ctx: Contexto, codemp: int | None = None, incluir_risco: bo
         vlr_total += vlr
         if st == "RUPTURA":
             vlr_ruptura += vlr
+        loja = por_loja.setdefault(l["CODEMP"], {**dict.fromkeys(_ORDEM_STATUS, 0), "VLR": 0.0, "VLR_RUPTURA": 0.0})
+        loja[st] += 1
+        loja["VLR"] += vlr
+        if st == "RUPTURA":
+            loja["VLR_RUPTURA"] += vlr
         if st == "RUPTURA" or (incluir_risco and st in ("IMINENTE", "ALERTA")):
             saida.append({
                 "CODEMP": l["CODEMP"], "CODPROD": l["CODPROD"], "DESCRPROD": l["DESCRPROD"],
@@ -188,6 +199,21 @@ def ruptura_por_loja(ctx: Contexto, codemp: int | None = None, incluir_risco: bo
                 "VLR_VENDIDO_PERIODO": round(vlr, 2), "VOLUMOSO": bool(l["VOLUMOSO"]),
             })
     saida.sort(key=lambda r: (_ORDEM_STATUS[r["STATUS"]], -r["VLR_VENDIDO_PERIODO"]))
+    if agrupar == "loja":
+        nomes = {e["CODEMP"]: e.get("EMPRESA") for e in ctx.sql.consultar(
+            f"SELECT CODEMP, NOMEFANTASIA AS EMPRESA FROM sankhya.TSIEMP WHERE CODEMP IN ({lojas})", (), 500)[0]}
+        saida = []
+        for emp, c in por_loja.items():
+            posicoes = sum(c[st] for st in _ORDEM_STATUS)
+            saida.append({
+                "CODEMP": emp, "EMPRESA": nomes.get(emp), "POSICOES_ATIVAS": posicoes, "RUPTURAS": c["RUPTURA"],
+                "IMINENTES": c["IMINENTE"], "ALERTAS": c["ALERTA"], "VOLUMOSOS_CD_ATENDE": c["CD_ATENDE"],
+                "INDICE_RUPTURA_ITENS": round(c["RUPTURA"] / posicoes * 100, 2) if posicoes else 0.0,
+                "INDICE_RUPTURA_VENDA": round(c["VLR_RUPTURA"] / c["VLR"] * 100, 2) if c["VLR"] else 0.0,
+                "VLR_VENDIDO_PERIODO": round(c["VLR"], 2),
+            })
+        saida.sort(key=lambda r: -r["INDICE_RUPTURA_ITENS"])
+        top = max(top, len(saida))  # resumo por loja sempre vem inteiro
     ativos = len(universo)
     return ctx.politica.resultado(
         saida[:top], len(saida) > top,

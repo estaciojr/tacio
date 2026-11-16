@@ -58,7 +58,9 @@ class Politica:
         return self.codemp_permitidas or None
 
     # --- saída ------------------------------------------------------------
-    def limpar_linha(self, linha: dict[str, Any]) -> dict[str, Any]:
+    def limpar_linha(self, linha: dict[str, Any], sem_mascara_texto: frozenset[str] = frozenset()) -> dict[str, Any]:
+        """sem_mascara_texto: colunas que a tool já controla (ex.: telefone de PJ, que com DDD tem
+        11 dígitos e seria lido como CPF). Não vale para colunas_mascaradas."""
         mascaradas = {c.upper() for c in self.cfg.colunas_mascaradas}
         out: dict[str, Any] = {}
         for col, v in linha.items():
@@ -67,15 +69,16 @@ class Politica:
                 v = corrigir_encoding(v.strip())
                 if col.upper() in mascaradas:
                     v = mascarar_cpf(v) if _CPF_RE.search(v) else v
-                elif self.cfg.mascarar_cpf_em_texto:
+                elif self.cfg.mascarar_cpf_em_texto and col.upper() not in sem_mascara_texto:
                     v = mascarar_cpf(v)
             out[col] = v
         return out
 
-    def resultado(self, linhas: list[dict[str, Any]], truncado: bool, **extra: Any) -> dict[str, Any]:
+    def resultado(self, linhas: list[dict[str, Any]], truncado: bool, *,
+                  sem_mascara_texto: frozenset[str] = frozenset(), **extra: Any) -> dict[str, Any]:
         """Formato padrão de retorno de toda tool de leitura."""
         res = {
-            "linhas": [self.limpar_linha(l) for l in linhas],
+            "linhas": [self.limpar_linha(l, sem_mascara_texto) for l in linhas],
             "total_retornado": len(linhas),
             "truncado": truncado,
         }

@@ -245,3 +245,20 @@ def test_payload_teams_e_telegram(monkeypatch):
     assert card["contentType"] == "application/vnd.microsoft.card.adaptive"
     assert "bot123:abc/sendMessage" in enviados[1][0]
     assert len(enviados[1][1]["text"]) <= 4000
+
+
+def test_ruptura_resumo_por_loja(tmp_path):
+    itens = [_item(1, 1, disp=0, vlr="500"), _item(1, 2, disp=100, vlr="500"),
+             _item(2, 1, disp=0, vlr="100"), _item(2, 2, disp=0, vlr="100"), _item(2, 3, disp=10, vlr="200")]
+    ex, leitor, _ = _executor(tmp_path, itens)
+    res = ex.tools["ruptura_por_loja"].fn(ex.ctx, agrupar="loja", top=1)
+    assert "sankhya.TSIEMP WHERE CODEMP IN (1,2,3)" in leitor.chamadas[-1][0]
+    lojas = {l["CODEMP"]: l for l in res["linhas"]}
+    assert set(lojas) == {1, 2} and not res["truncado"]          # resumo por loja vem inteiro
+    assert lojas[1]["INDICE_RUPTURA_ITENS"] == 50.0 and lojas[1]["INDICE_RUPTURA_VENDA"] == 50.0
+    assert (lojas[2]["RUPTURAS"], lojas[2]["IMINENTES"], lojas[2]["POSICOES_ATIVAS"]) == (2, 1, 3)
+    assert res["linhas"][0]["CODEMP"] == 2                     # pior índice primeiro
+    assert res["rupturas"] == 3                                # índice da rede continua no topo
+    from tacio.policy import PoliticaViolada
+    with pytest.raises(PoliticaViolada, match="item, loja"):
+        ex.tools["ruptura_por_loja"].fn(ex.ctx, agrupar="produto")

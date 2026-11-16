@@ -174,3 +174,20 @@ def test_regra_incompleta(tmp_path):
     ctx, tools, _ = _ctx(tmp_path, regra="[frete]\ntops_remessa = [1154]\n")
     with pytest.raises(PoliticaViolada, match="incompleta"):
         tools["frete_arrecadado"].fn(ctx, **PERIODO)
+
+
+def test_custo_por_placa_mes_a_mes(tmp_path):
+    ctx, tools, leitor = _ctx(tmp_path, codemp_permitidas=[])
+    res = tools["custo_por_placa"].fn(ctx, data_inicio="2026-08-15", data_fim="2026-10-31", agrupar="mes")
+    fatias = [c[1][:2] for c in leitor.chamadas if "sankhya.TGFRAV" in c[0]]
+    assert fatias == [[date(2026, 8, 15), date(2026, 8, 31)], [date(2026, 9, 1), date(2026, 9, 30)],
+                      [date(2026, 10, 1), date(2026, 10, 31)]]
+    assert [l["MES"] for l in res["linhas"]] == ["2026-08", "2026-09", "2026-10"]
+    assert res["resumo"]["veiculos"] == 1 and len(res["resumo"]["por_mes"]) == 3
+    assert res["resumo"]["vlr_custo"] == 45.0 and res["agrupar"] == "mes"
+
+
+def test_custo_por_placa_agrupar_invalido(tmp_path):
+    ctx, tools, _ = _ctx(tmp_path, codemp_permitidas=[])
+    with pytest.raises(PoliticaViolada, match="Válidos"):
+        tools["custo_por_placa"].fn(ctx, **PERIODO, agrupar="dia")
