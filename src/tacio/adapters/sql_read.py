@@ -32,7 +32,7 @@ def validar_somente_leitura(sql: str, tabelas_permitidas: Sequence[str] | None =
         raise PoliticaViolada("Somente SELECT é permitido.")
     if any(stmt.find_all(*_PROIBIDOS)):
         raise PoliticaViolada("Comando de escrita/DDL detectado; somente leitura é permitida.")
-    if tabelas_permitidas is not None:
+    if tabelas_permitidas is not None and "*" not in tabelas_permitidas:
         permitidas = {t.upper() for t in tabelas_permitidas}
         ctes = {c.alias_or_name.upper() for c in stmt.find_all(exp.CTE)}
         usadas = {t.name.upper() for t in stmt.find_all(exp.Table)} - ctes

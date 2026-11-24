@@ -88,3 +88,33 @@ def test_campo_extra_invalido_e_recusado(tmp_path):
     ctx, tools, _ = _ctx(tmp_path, '[cadastro]\ncampos_contato = ["X; DROP"]\n')
     with pytest.raises(PoliticaViolada, match="inválido"):
         tools["parceiro"].fn(ctx, termo="wise")
+
+
+def test_produto_busca_por_palavras_marca_e_status(tmp_path):
+    ctx, tools, leitor = _ctx(tmp_path)
+    tools["produto"].fn(ctx, termo="colorante azul", marca="suvinil", status=1)
+    sql, params, _ = leitor.chamadas[0]
+    assert sql.count("PRO.DESCRPROD LIKE ?") == 2 and "PRO.MARCA LIKE ?" in sql
+    assert params == ["%colorante%", "%azul%", "%suvinil%", 1]
+    assert "PRO.ATIVO = 'S'" in sql and "AD_STATUS" in sql and "TOP 50" in sql
+
+
+def test_produto_numero_e_codigo_ou_referencia_e_exige_filtro(tmp_path):
+    ctx, tools, leitor = _ctx(tmp_path)
+    tools["produto"].fn(ctx, termo="7891234567890", incluir_inativos=True)
+    sql, params, _ = leitor.chamadas[0]
+    assert "(PRO.CODPROD = ? OR PRO.REFERENCIA = ?)" in sql and params == [-1, "7891234567890"]
+    assert "PRO.ATIVO = 'S'" not in sql
+    with pytest.raises(PoliticaViolada):
+        tools["produto"].fn(ctx)
+
+
+def test_grupos_produto_por_nome_e_por_pai(tmp_path):
+    ctx, tools, leitor = _ctx(tmp_path)
+    tools["grupos_produto"].fn(ctx, termo="tinta", apenas_analiticos=True)
+    sql, params, _ = leitor.chamadas[0]
+    assert "GRU.DESCRGRUPOPROD LIKE ?" in sql and "GRU.ANALITICO = 'S'" in sql and params == ["%tinta%"]
+    tools["grupos_produto"].fn(ctx, codgrupai=107)
+    assert leitor.chamadas[1][1] == [107]
+    with pytest.raises(PoliticaViolada):
+        tools["grupos_produto"].fn(ctx)
